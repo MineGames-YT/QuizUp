@@ -57,13 +57,12 @@ class User(UserMixin, db.Model):
     
     # статистика
     total_games = db.Column(db.Integer, default=0)
-    total_wins = db.Column(db.Integer, default=0)
+    total_wins = db.Column(db.Integer, default=0)  # вот это поле есть!
     total_points = db.Column(db.Integer, default=0)
     rating = db.Column(db.Integer, default=1000)  # elo-like рейтинг
     
     def __repr__(self):
         return f'<User {self.username}>'
-
 
 class Question(db.Model):
     """вопрос для викторины"""
@@ -1099,14 +1098,16 @@ def end_game(pin: str):
                 user.total_games += 1
                 user.total_points += p['score']
 
+                # ИСПРАВЛЕНО: используем total_wins вместо wins
                 if winner:
                     if mode == 'teams' and p['team'] == winner:
-                        user.wins += 1
+                        user.total_wins += 1
                     if mode == 'ffa' and p['name'] == winner:
-                        user.wins += 1
+                        user.total_wins += 1
 
-                # простая формула рейтинга (можно усложнять, но для прототипа ок)
-                user.rating = round((user.wins / user.total_games) * 100, 1) if user.total_games else 0
+                # простая формула рейтинга
+                if user.total_games > 0:
+                    user.rating = round((user.total_wins / user.total_games) * 100, 1)
 
             db.session.commit()
 
@@ -1117,7 +1118,6 @@ def end_game(pin: str):
         'mode': mode,
         'winner': winner,
     }, room=pin)
-
 
 def time_up(pin: str, timer_id: str):
     """срабатывает, когда время на вопрос закончилось"""
@@ -1751,7 +1751,39 @@ def get_game_stats(pin):
 
 @app.route('/api/game/<pin>/export')
 def export_game_results(pin):
-    """экспорт результатов в json"""
+    """экспорт результатов игры в json файл"""
+    # сначала проверяем активные игры
+    with games_lock:
+        if pin in active_games:
+            game = active_games[pin]
+            stats = game.get_stats()
+            
+            # создаем данные для экспорта
+            data = {
+                'pin': pin,
+                'topic': game.topic,
+                'mode': game.mode,
+                'difficulty': game.difficulty,
+                'created_at': datetime.fromtimestamp(game.created_at).isoformat(),
+                'ended_at': datetime.utcnow().isoformat(),
+                'questions_count': game.questions_count,
+                'players': stats
+            }
+            
+            # сохраняем во временный файл
+            filename = f'game_{pin}_{int(time.time())}.json'
+            filepath = os.path.join('/tmp', filename)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            return send_file(
+                filepath, 
+                as_attachment=True, 
+                download_name=filename,
+                mimetype='application/json'
+            )
+    
+    # если игра уже в бд
     history = GameHistory.query.filter_by(pin=pin).order_by(GameHistory.created_at.desc()).first()
     if not history:
         return jsonify({'error': 'игра не найдена'}), 404
@@ -1766,12 +1798,14 @@ def export_game_results(pin):
         'created_at': history.created_at.isoformat(),
         'ended_at': history.ended_at.isoformat() if history.ended_at else None,
         'winner': history.winner_team,
+        'questions_count': history.questions_count,
         'players': [{
             'name': s.guest_name or (s.user.username if s.user else 'игрок'),
             'team': s.team,
             'score': s.score,
             'correct': s.correct_answers,
-            'wrong': s.wrong_answers
+            'wrong': s.wrong_answers,
+            'avg_time': s.avg_response_time
         } for s in stats]
     }
     
@@ -1781,8 +1815,12 @@ def export_game_results(pin):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     
-    return send_file(filepath, as_attachment=True, download_name=filename)
-
+    return send_file(
+        filepath, 
+        as_attachment=True, 
+        download_name=filename,
+        mimetype='application/json'
+    )
 
 # ==================== ИНИЦИАЛИЗАЦИЯ ====================
 

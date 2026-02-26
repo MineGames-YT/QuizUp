@@ -382,8 +382,10 @@
         });
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ЭКСПОРТА
     function exportResults() {
-        window.open(`/api/game/${gamePin}/export`, '_blank');
+        // Используем window.location.href вместо window.open для надежности
+        window.location.href = `/api/game/${gamePin}/export`;
     }
 
     // админ функции
