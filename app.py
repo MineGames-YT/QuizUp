@@ -473,7 +473,7 @@ class GameSession:
         if sid and sid in self.sid_to_token:
             del self.sid_to_token[sid]
 
-        # отменяем таймер на удаление (на всякий)
+        # отменяем таймер на удаление
         t = p.get('disconnect_timer')
         if t:
             try:
