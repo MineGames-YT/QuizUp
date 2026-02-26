@@ -2,11 +2,6 @@
 
 поддержка:
 - models:generateContent
-- опционально: grounding with google search через tool google_search
-
-почему отдельный модуль:
-- чтобы app.py оставался читаемым
-- чтобы можно было легко добавить других провайдеров по такому же шаблону
 """
 
 from __future__ import annotations
@@ -39,10 +34,8 @@ class GeminiClient:
         self,
         *,
         prompt: str,
-        use_search: bool = False,
         temperature: float = 0.7,
         max_tokens: int = 3500,
-        response_mime_type: str = "application/json",
     ) -> Dict[str, Any]:
         if not self.api_key:
             raise GeminiAPIError("не задан gemini api key")
@@ -66,18 +59,8 @@ class GeminiClient:
             "generationConfig": {
                 "temperature": float(temperature),
                 "maxOutputTokens": int(max_tokens),
-                # помогает получить именно json, а не красивый текст с пояснениями
-                "response_mime_type": response_mime_type,
             },
         }
-
-        # grounding with google search
-        if use_search:
-            payload["tools"] = [
-                {
-                    "google_search": {},
-                }
-            ]
 
         try:
             resp = httpx.post(url, headers=headers, json=payload, timeout=self.timeout)
@@ -95,10 +78,7 @@ class GeminiClient:
 
 
 def extract_text(response_json: Dict[str, Any]) -> str:
-    """вытаскиваем текст первого кандидата
-
-    при response_mime_type=application/json gemini чаще всего возвращает json строкой в parts[].text
-    """
+    """вытаскиваем текст первого кандидата"""
 
     try:
         candidates = response_json.get("candidates") or []

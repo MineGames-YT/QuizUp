@@ -3,23 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}QuizBattle{% endblock %}</title>
+    <title>{% block title %}QuizUp{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
-    <!-- Переключатель темы -->
-    <button class="theme-toggle" onclick="toggleTheme()" title="сменить тему">
-        <span id="theme-icon">🌙</span>
+    <!-- переключатель темы -->
+    <button class="theme-toggle" type="button" id="themeToggle" title="сменить тему" aria-label="сменить тему">
+        <span class="theme-icon" aria-hidden="true">
+            <!-- moon (for light theme) -->
+            <svg class="theme-icon-moon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+            </svg>
+            <!-- sun (for dark theme) -->
+            <svg class="theme-icon-sun" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="M4.93 4.93l1.41 1.41" />
+                <path d="M17.66 17.66l1.41 1.41" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+                <path d="M4.93 19.07l1.41-1.41" />
+                <path d="M17.66 6.34l1.41-1.41" />
+            </svg>
+        </span>
     </button>
     
     <!-- Навигация -->
     <div class="container">
         <nav class="nav">
-            <a href="{{ url_for('index') }}" class="nav-logo">QuizBattle</a>
+            <a href="{{ url_for('index') }}" class="nav-logo">QuizUp</a>
             <div class="nav-links">
-                <a href="{{ url_for('index') }}">Играть</a>
-                <a href="{{ url_for('rating') }}">Рейтинг</a>
+                {% set ep = request.endpoint %}
+                <a href="{{ url_for('index') }}" class="{% if ep in ['index', 'lobby', 'game'] %}active{% endif %}">Играть</a>
                 {% if current_user.is_authenticated %}
                     <a href="{{ url_for('profile') }}">Профиль</a>
                     <div class="user-menu">
@@ -27,18 +44,20 @@
                         <a href="{{ url_for('logout') }}">Выйти</a>
                     </div>
                 {% else %}
-                    <a href="{{ url_for('login') }}">Вход</a>
-                    <a href="{{ url_for('register') }}">Регистрация</a>
+                    <a href="{{ url_for('login') }}" class="{% if ep == 'login' %}active{% endif %}">Вход</a>
+                    <a href="{{ url_for('register') }}" class="{% if ep == 'register' %}active{% endif %}">Регистрация</a>
                 {% endif %}
             </div>
         </nav>
         
-        <!-- Флеш сообщения -->
+        <!-- уведомления (toast) -->
+        <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-error">{{ message }}</div>
-                {% endfor %}
+                <script>
+                    window.__flash_messages = {{ messages|tojson }};
+                </script>
             {% endif %}
         {% endwith %}
         
@@ -64,28 +83,7 @@
     </audio>
     
     <script>
-        // Переключение темы
-        function toggleTheme() {
-            const html = document.documentElement;
-            const icon = document.getElementById('theme-icon');
-            
-            if (html.getAttribute('data-theme') === 'dark') {
-                html.setAttribute('data-theme', 'light');
-                icon.textContent = '🌙';
-                localStorage.setItem('theme', 'light');
-            } else {
-                html.setAttribute('data-theme', 'dark');
-                icon.textContent = '☀️';
-                localStorage.setItem('theme', 'dark');
-            }
-        }
-        
-        // Загрузка темы при старте
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('theme-icon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-        
-        // Воспроизведение звука
+        // воспроизведение звука
         function playSound(name) {
             const sound = document.getElementById('sound-' + name);
             if (sound) {
@@ -96,6 +94,8 @@
         }
     </script>
     
+        <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

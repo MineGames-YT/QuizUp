@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Игра - QuizBattle{% endblock %}
+{% block title %}Игра - QuizUp{% endblock %}
 
 {% block content %}
 <!-- Таймер и счет -->
@@ -93,7 +93,6 @@
         </div>
         <div class="modal-footer">
             <a href="/" class="btn btn-primary">На главную</a>
-            <button class="btn btn-secondary" onclick="exportResults()">Скачать результаты</button>
         </div>
     </div>
 </div>
@@ -132,10 +131,12 @@
     }
 
     function getGuestName() {
+        const stored = ((localStorage.getItem('qb_player_name') || localStorage.getItem('qb_guest_name') || '') + '').trim();
+        if (stored) return stored;
         {% if current_user.is_authenticated %}
         return '{{ current_user.username }}';
         {% else %}
-        return (localStorage.getItem('qb_guest_name') || '').trim();
+        return '';
         {% endif %}
     }
 
@@ -147,12 +148,10 @@
     }
 
     socket.on('connect', function() {
-        const roomPassword = localStorage.getItem('qb_game_password_' + gamePin) || '';
         socket.emit('join_game', {
             pin: gamePin,
             guest_name: myName,
-            player_token: myToken,
-            password: roomPassword
+            player_token: myToken
         });
     });
 
@@ -337,7 +336,7 @@
     });
 
     socket.on('error_message', function(data) {
-        alert(data.message);
+        QB_UI.toast(data.message, 'error', 4500);
     });
 
     function startTimer(seconds) {
@@ -381,13 +380,6 @@
             answer: index
         });
     }
-
-    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ЭКСПОРТА
-    function exportResults() {
-        // Используем window.location.href вместо window.open для надежности
-        window.location.href = `/api/game/${gamePin}/export`;
-    }
-
     // админ функции
     function pauseGame() {
         socket.emit('admin_pause', { pin: gamePin, player_token: myToken });
@@ -398,13 +390,18 @@
     }
 
     function endGame() {
-        if (confirm('завершить игру?')) {
-            socket.emit('admin_end', { pin: gamePin, player_token: myToken });
-        }
+        QB_UI.confirm({
+            title: 'завершить игру',
+            message: 'точно завершить игру прямо сейчас?',
+            okText: 'завершить',
+            cancelText: 'отмена'
+        }).then(function (ok) {
+            if (ok) socket.emit('admin_end', { pin: gamePin, player_token: myToken });
+        });
     }
 
     socket.on('game_paused', function() {
-        alert('игра на паузе');
+        QB_UI.toast('игра на паузе', 'info');
     });
 
     socket.on('game_resumed', function() {

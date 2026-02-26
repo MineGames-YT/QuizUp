@@ -1,13 +1,7 @@
-"""
-quizbattle - командная викторина в реальном времени
-полностью переписанная версия с бд, авторизацией и всеми фичами
-"""
-
 import os
 import random
 import string
 import json
-import base64
 import time
 import threading
 import uuid
@@ -20,11 +14,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from sqlalchemy import func
-import requests
 from dotenv import load_dotenv
 
-# gigachat интеграция (ai генерация вопросов)
-from gigachat_client import GigaChatClient, GigaChatAPIError
+# генерация вопросов через gemini
 from gemini_client import GeminiClient, GeminiAPIError, extract_text as gemini_extract_text
 from fallback_questions import FALLBACK_QUESTIONS
 
@@ -34,7 +26,7 @@ load_dotenv()
 # инициализация flask приложения
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quizbattle.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quizup.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # инициализация расширений flask
@@ -59,7 +51,6 @@ class User(UserMixin, db.Model):
     total_games = db.Column(db.Integer, default=0)
     total_wins = db.Column(db.Integer, default=0)  # вот это поле есть!
     total_points = db.Column(db.Integer, default=0)
-    rating = db.Column(db.Integer, default=1000)  # elo-like рейтинг
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -141,38 +132,14 @@ TOPICS = [
     'видеоигры'
 ]
 
-# конфигурация для API Кими
-KIMI_API_KEY = os.environ.get('KIMI_API_KEY', '')
-KIMI_API_URL = os.environ.get('KIMI_API_URL', 'https://api.moonshot.cn/v1/chat/completions')
-
-# конфигурация gigachat (если хотите генерацию тем/вопросов через gigachat api)
-GIGACHAT_AUTH_KEY = os.environ.get('GIGACHAT_AUTH_KEY', '').strip()
-GIGACHAT_CLIENT_ID = os.environ.get('GIGACHAT_CLIENT_ID', '').strip()
-GIGACHAT_CLIENT_SECRET = os.environ.get('GIGACHAT_CLIENT_SECRET', '').strip()
-
-# если не передали готовую base64-строку, соберём её из id/secret
-if not GIGACHAT_AUTH_KEY and GIGACHAT_CLIENT_ID and GIGACHAT_CLIENT_SECRET:
-    raw = f"{GIGACHAT_CLIENT_ID}:{GIGACHAT_CLIENT_SECRET}".encode('utf-8')
-    GIGACHAT_AUTH_KEY = base64.b64encode(raw).decode('utf-8')
-
-GIGACHAT_SCOPE = os.environ.get('GIGACHAT_SCOPE', 'GIGACHAT_API_PERS').strip()
-GIGACHAT_MODEL = os.environ.get('GIGACHAT_MODEL', 'GigaChat').strip()
-
-# в некоторых окружениях могут понадобиться сертификаты минцифры.
-# если у вас сыпется ssl error - можно временно поставить false.
-GIGACHAT_VERIFY_SSL_CERTS = os.environ.get('GIGACHAT_VERIFY_SSL_CERTS', 'true').lower() in ('1', 'true', 'yes', 'y')
-# конфигурация gemini (google ai for developers)
-# ключ берётся из google ai studio: https://aistudio.google.com/app/apikey
+# конфигурация gemini
+# google ai studio: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro").strip()
 GEMINI_API_BASE_URL = os.environ.get("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com").strip()
 
-# провайдер генерации вопросов по умолчанию (auto/gigachat/gemini/kimi/db)
-DEFAULT_AI_PROVIDER = os.environ.get("DEFAULT_AI_PROVIDER", "auto").strip().lower()
-DEFAULT_GEMINI_SEARCH = os.environ.get("DEFAULT_GEMINI_SEARCH", "false").lower() in ("1", "true", "yes", "y")
 
-
-# игровой тайминг (по тз: 30 секунд на вопрос)
+# игровой тайминг 
 QUESTION_TIME_LIMIT = int(os.environ.get('QUESTION_TIME_LIMIT', '30'))
 
 # если игрок просто перезагружает страницу/переходит из лобби в игру - даём пару секунд на реконнект
@@ -196,73 +163,6 @@ def generate_pin():
         with games_lock:
             if pin not in active_games:
                 return pin
-
-
-def generate_questions_via_kimi(topic, difficulty, count=35):
-    """генерация вопросов через API Кими"""
-    if not KIMI_API_KEY:
-        print("[!] нет API ключа")
-        return None
-    
-    # составляем промпт для API
-    prompt = f"""Создай {count} вопросов для викторины на тему "{topic}" с уровнем сложности "{difficulty}".
-
-Требования:
-- Вопросы должны быть разнообразными и интересными
-- 4 варианта ответа на каждый вопрос
-- Только один правильный ответ
-
-Ответь СТРОГО в формате JSON:
-{{
-  "questions": [
-    {{
-      "question": "текст вопроса",
-      "options": ["вариант 1", "вариант 2", "вариант 3", "вариант 4"],
-      "correct": 0
-    }}
-  ]
-}}
-
-gде correct - индекс правильного ответа (0-3)."""
-
-    try:
-        headers = {
-            'Authorization': f'Bearer {KIMI_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        
-        data = {
-            'model': 'moonshot-v1-8k',
-            'messages': [
-                {'role': 'system', 'content': 'ты - генератор вопросов для викторины. отвечай только в формате json.'},
-                {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.7
-        }
-        
-        response = requests.post(KIMI_API_URL, headers=headers, json=data, timeout=60)
-        
-        if response.status_code == 200:
-            result = response.json()
-            content = result['choices'][0]['message']['content']
-            
-            # парсим json из ответа
-            try:
-                # ищем json в тексте
-                start = content.find('{')
-                end = content.rfind('}') + 1
-                if start != -1 and end != 0:
-                    json_str = content[start:end]
-                    parsed = json.loads(json_str)
-                    return parsed.get('questions', [])
-            except json.JSONDecodeError:
-                pass
-                
-    except Exception as e:
-        print(f"ошибка генерации через kimi: {e}")
-    
-    return None
-
 
 
 def _safe_parse_questions_json(content: str):
@@ -324,9 +224,9 @@ def _safe_parse_questions_json(content: str):
     return valid
 
 
-def generate_questions_via_gigachat(topic, difficulty, count=20):
-    """генерация вопросов через gigachat api"""
-    if not GIGACHAT_AUTH_KEY:
+def generate_questions_via_gemini(topic, difficulty, count=20):
+    """генерация вопросов через gemini api"""
+    if not GEMINI_API_KEY:
         return None
 
     prompt = f"""создай {count} вопросов для викторины на тему \"{topic}\" с уровнем сложности \"{difficulty}\" (на русском языке).
@@ -351,68 +251,6 @@ def generate_questions_via_gigachat(topic, difficulty, count=20):
 где correct - индекс (0-3) правильного ответа."""
 
     try:
-        client = GigaChatClient(
-            credentials=GIGACHAT_AUTH_KEY,
-            scope=GIGACHAT_SCOPE,
-            model=GIGACHAT_MODEL,
-            verify_ssl_certs=GIGACHAT_VERIFY_SSL_CERTS,
-            timeout=90,
-        )
-
-        result = client.chat_completions(
-            messages=[
-                {'role': 'system', 'content': 'ты генератор вопросов для викторины. отвечай только json без markdown.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            temperature=0.7,
-            max_tokens=3500,
-        )
-
-        content = result['choices'][0]['message']['content']
-        parsed = _safe_parse_questions_json(content)
-        return parsed if parsed else None
-
-    except GigaChatAPIError as e:
-        print(f"ошибка генерации через gigachat: {e} (status={e.status_code})")
-        if e.details:
-            print(e.details)
-    except Exception as e:
-        print(f"ошибка генерации через gigachat: {e}")
-
-    return None
-
-
-
-def generate_questions_via_gemini(topic, difficulty, count=20, *, use_search=False):
-    """генерация вопросов через gemini api
-
-    use_search=True включает google search grounding (если модель решит что нужно)
-    """
-    if not GEMINI_API_KEY:
-        return None
-
-    prompt = f"""создай {count} вопросов для викторины на тему \"{topic}\" с уровнем сложности \"{difficulty}\" (на русском языке).
-
-требования:
-- вопросы должны быть интересными и разнообразными
-- 4 варианта ответа на каждый вопрос
-- только один правильный ответ
-- не используй markdown, только plain text
-
-ответь строго в формате json без пояснений:
-{{
-  \"questions\": [
-    {{
-      \"question\": \"текст вопроса\",
-      \"options\": [\"вариант 1\", \"вариант 2\", \"вариант 3\", \"вариант 4\"],
-      \"correct\": 0
-    }}
-  ]
-}}
-
-gде correct - индекс (0-3) правильного ответа."""
-
-    try:
         client = GeminiClient(
             api_key=GEMINI_API_KEY,
             model=GEMINI_MODEL,
@@ -422,10 +260,8 @@ gде correct - индекс (0-3) правильного ответа."""
 
         result = client.generate_content(
             prompt=prompt,
-            use_search=bool(use_search),
             temperature=0.7,
             max_tokens=3500,
-            response_mime_type="application/json",
         )
 
         content = gemini_extract_text(result)
@@ -487,12 +323,8 @@ class GameSession:
         mode: str = 'teams',
         difficulty: str = 'medium',
         questions_count: int = 5,
-        has_password: bool = False,
-        password: str | None = None,
         time_limit: int = QUESTION_TIME_LIMIT,
         bonus_enabled: bool = True,
-        ai_provider: str = DEFAULT_AI_PROVIDER,
-        gemini_search_enabled: bool = DEFAULT_GEMINI_SEARCH,
     ):
         self.pin = generate_pin()
 
@@ -511,14 +343,6 @@ class GameSession:
 
         self.time_limit = int(time_limit)
         self.bonus_enabled = bool(bonus_enabled)
-
-        # откуда добирать вопросы, если их не хватает в базе
-        # auto: пытаемся по очереди доступные ключи (gigachat -> gemini -> kimi)
-        self.ai_provider = (ai_provider or DEFAULT_AI_PROVIDER or 'auto').strip().lower()
-        self.gemini_search_enabled = bool(gemini_search_enabled)
-
-        self.has_password = bool(has_password)
-        self.password = password
 
         self.status = 'waiting'
         self.created_at = time.time()
@@ -683,46 +507,10 @@ class GameSession:
 
             new_questions = None
 
-            # выбираем источник генерации вопросов
-            # важно: даже если выбран конкретный провайдер, при отсутствии ключа мы фоллбэкаем,
-            # чтобы игра не умирала (иначе это будет боль в демо).
-            provider = (self.ai_provider or 'auto').strip().lower()
-
-            if provider == 'db':
-                providers_order = []
-            elif provider == 'auto':
-                providers_order = ['gigachat', 'gemini', 'kimi']
-            elif provider in ('gigachat', 'gemini', 'kimi'):
-                providers_order = [provider, 'gigachat', 'gemini', 'kimi']
-            else:
-                providers_order = ['gigachat', 'gemini', 'kimi']
-
-            # убираем дубли, сохраняя порядок
-            uniq = []
-            for p_name in providers_order:
-                if p_name not in uniq:
-                    uniq.append(p_name)
-
-            for p_name in uniq:
-                # берём с запасом, чтобы после фильтрации осталось нужное
+            # берём с запасом, чтобы после фильтрации осталось нужное
+            if GEMINI_API_KEY:
                 req_count = max(12, missing + 8)
-
-                if p_name == 'gigachat' and GIGACHAT_AUTH_KEY:
-                    new_questions = generate_questions_via_gigachat(self.topic, self.difficulty, req_count)
-
-                elif p_name == 'gemini' and GEMINI_API_KEY:
-                    new_questions = generate_questions_via_gemini(
-                        self.topic,
-                        self.difficulty,
-                        req_count,
-                        use_search=self.gemini_search_enabled,
-                    )
-
-                elif p_name == 'kimi' and KIMI_API_KEY:
-                    new_questions = generate_questions_via_kimi(self.topic, self.difficulty, req_count)
-
-                if new_questions:
-                    break
+                new_questions = generate_questions_via_gemini(self.topic, self.difficulty, req_count)
 
             if new_questions:
                 save_questions_to_db(self.topic, new_questions, self.difficulty)
@@ -883,20 +671,20 @@ def register():
     
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
-        email = request.form.get('email', '').strip()
         password = request.form.get('password', '')
         
-        if not username or not email or not password:
+        if not username or not password:
             flash('заполните все поля')
             return redirect(url_for('register'))
         
         if User.query.filter_by(username=username).first():
             flash('такой username уже занят')
             return redirect(url_for('register'))
-        
+
+        # email убрали из формы, но в базе поле есть: создаём служебный уникальный email
+        email = f"{username}@quiz.local"
         if User.query.filter_by(email=email).first():
-            flash('такой email уже зарегистрирован')
-            return redirect(url_for('register'))
+            email = f"{username}.{uuid.uuid4().hex[:6]}@quiz.local"
         
         user = User(
             username=username,
@@ -905,9 +693,10 @@ def register():
         )
         db.session.add(user)
         db.session.commit()
-        
-        flash('регистрация успешна! теперь войдите')
-        return redirect(url_for('login'))
+
+        # сразу логиним и кидаем в профиль
+        login_user(user, remember=True)
+        return redirect(url_for('profile'))
     
     return render_template('register.html')
 
@@ -947,19 +736,8 @@ def profile():
     """профиль пользователя"""
     # статистика игр
     stats = PlayerStats.query.filter_by(user_id=current_user.id).all()
-    
-    # позиция в рейтинге
-    rank = User.query.filter(User.rating > current_user.rating).count() + 1
-    
-    return render_template('profile.html', stats=stats, rank=rank)
 
-
-@app.route('/rating')
-def rating():
-    """таблица рейтинга - показываем только тех кто хоть раз играл"""
-    # показываем только тех кто хотя бы раз играл
-    users = User.query.filter(User.total_games > 0).order_by(User.rating.desc()).limit(100).all()
-    return render_template('rating.html', users=users)
+    return render_template('profile.html', stats=stats)
 
 
 @app.route('/join', methods=['POST'])
@@ -967,7 +745,9 @@ def join():
     """присоединение к игре по POST"""
     pin = request.form.get('pin', '').upper().strip()
     guest_name = request.form.get('guest_name', '').strip()
-    password = request.form.get('password', '')
+
+    if not guest_name and current_user.is_authenticated:
+        guest_name = current_user.username
     
     if not pin or not guest_name:
         flash('заполните все поля')
@@ -984,9 +764,6 @@ def join():
             flash('игра уже началась')
             return redirect(url_for('index'))
         
-        if game.has_password and game.password != password:
-            flash('неверный пароль')
-            return redirect(url_for('index'))
     
     # сохраняем в сессию для websocket
     session['game_pin'] = pin
@@ -1086,28 +863,6 @@ def end_game(pin: str):
                     avg_response_time=p['avg_time'],
                 )
                 db.session.add(ps)
-
-            # обновляем общий рейтинг пользователей
-            for p in players_snapshot:
-                if not p['user_id']:
-                    continue
-                user = User.query.get(p['user_id'])
-                if not user:
-                    continue
-
-                user.total_games += 1
-                user.total_points += p['score']
-
-                # ИСПРАВЛЕНО: используем total_wins вместо wins
-                if winner:
-                    if mode == 'teams' and p['team'] == winner:
-                        user.total_wins += 1
-                    if mode == 'ffa' and p['name'] == winner:
-                        user.total_wins += 1
-
-                # простая формула рейтинга
-                if user.total_games > 0:
-                    user.rating = round((user.total_wins / user.total_games) * 100, 1)
 
             db.session.commit()
 
@@ -1241,15 +996,7 @@ def handle_create_game(data):
     mode = (data.get('mode') or 'teams').strip()
     difficulty = (data.get('difficulty') or 'medium').strip()
     questions_count = int(data.get('questions_count', 5))
-    has_password = bool(data.get('has_password', False))
-    password = (data.get('password') or '').strip() if has_password else None
     bonus_enabled = bool(data.get('bonus_enabled', True))
-
-    ai_provider = (data.get('ai_provider') or DEFAULT_AI_PROVIDER or 'auto').strip().lower()
-    gemini_search_enabled = bool(data.get('gemini_search_enabled', DEFAULT_GEMINI_SEARCH))
-
-    if ai_provider not in ('auto', 'gigachat', 'gemini', 'kimi', 'db'):
-        ai_provider = DEFAULT_AI_PROVIDER if DEFAULT_AI_PROVIDER in ('auto', 'gigachat', 'gemini', 'kimi', 'db') else 'auto'
 
     # стабильный токен игрока (лежит в localStorage). используем как "ключ ведущего"
     creator_token = (data.get('player_token') or '').strip() or uuid.uuid4().hex
@@ -1278,12 +1025,8 @@ def handle_create_game(data):
         mode=mode,
         difficulty=difficulty,
         questions_count=questions_count,
-        has_password=has_password,
-        password=password,
         time_limit=QUESTION_TIME_LIMIT,
         bonus_enabled=bonus_enabled,
-        ai_provider=ai_provider,
-        gemini_search_enabled=gemini_search_enabled,
     )
 
     with games_lock:
@@ -1300,8 +1043,6 @@ def handle_create_game(data):
         'questions_count': game.questions_count,
         'questions_per_team': game.questions_per_team,
         'time_limit': game.time_limit,
-        'ai_provider': game.ai_provider,
-        'gemini_search_enabled': bool(game.gemini_search_enabled),
     })
 
 
@@ -1353,7 +1094,6 @@ def handle_join_game(data):
     pin = (data.get('pin') or '').upper().strip()
     player_token = (data.get('player_token') or '').strip()
     guest_name = data.get('guest_name', '')
-    password = data.get('password')
 
     if not pin:
         emit('error_message', {'message': 'неверный pin'})
@@ -1368,12 +1108,6 @@ def handle_join_game(data):
         if not game:
             emit('error_message', {'message': 'игра не найдена'})
             return
-
-        # проверка пароля нужна только на вход в лобби (waiting). при реконнекте в игре не трогаем.
-        if game.status == 'waiting' and game.has_password:
-            if password != game.password:
-                emit('error_message', {'message': 'неверный пароль'})
-                return
 
         # если игра идёт - впускаем только реконнекты (по token)
         if game.status in ('playing', 'paused'):
@@ -1449,7 +1183,7 @@ def handle_start_game(data):
             emit('error_message', {'message': 'нужно минимум 2 игрока'})
             return
 
-        # подгружаем вопросы (бд -> gigachat/kimi -> fallback)
+        # подгружаем вопросы (бд -> gemini -> fallback)
         game.load_questions()
         if not game.questions or len(game.questions) < game.questions_count:
             emit('error_message', {'message': 'не удалось загрузить вопросы'})
@@ -1834,7 +1568,7 @@ def init_db():
 if __name__ == '__main__':
     init_db()
     print("=" * 50)
-    print("quizbattle сервер запущен")
+    print("QuizUp сервер запущен")
     print("=" * 50)
     print("открой http://localhost:5000 в браузере")
     print("=" * 50)

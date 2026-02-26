@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Лобби - QuizBattle{% endblock %}
+{% block title %}Лобби - QuizUp{% endblock %}
 
 {% block content %}
 <!-- PIN код -->
@@ -97,10 +97,12 @@
     }
 
     function getGuestName() {
+        const stored = ((localStorage.getItem('qb_player_name') || localStorage.getItem('qb_guest_name') || '') + '').trim();
+        if (stored) return stored;
         {% if current_user.is_authenticated %}
         return '{{ current_user.username }}';
         {% else %}
-        return (localStorage.getItem('qb_guest_name') || '').trim();
+        return '';
         {% endif %}
     }
 
@@ -118,12 +120,10 @@
     document.getElementById('gamePin').textContent = gamePin;
 
     socket.on('connect', function() {
-        const roomPassword = localStorage.getItem('qb_game_password_' + gamePin) || '';
         socket.emit('join_game', {
             pin: gamePin,
             guest_name: myName,
-            player_token: myToken,
-            password: roomPassword
+            player_token: myToken
         });
     });
 
@@ -177,7 +177,7 @@
     });
 
     socket.on('error_message', function(data) {
-        alert(data.message);
+        QB_UI.toast(data.message, 'error', 4500);
     });
 
     function updatePlayerList(players) {
@@ -229,9 +229,9 @@
     }
 
     function copyPin() {
-        navigator.clipboard.writeText(gamePin).then(() => {
-            alert('pin скопирован: ' + gamePin);
-        });
+        navigator.clipboard.writeText(gamePin)
+            .then(() => QB_UI.toast('pin скопирован: ' + gamePin, 'success'))
+            .catch(() => QB_UI.toast('не удалось скопировать pin', 'error', 4500));
     }
 </script>
 {% endblock %}

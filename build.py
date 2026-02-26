@@ -19,7 +19,7 @@ print("[*] это может занять несколько минут...")
 
 PyInstaller.__main__.run([
     'desktop.py',
-    '--name=QuizBattle',
+    '--name=QuizUp',
     '--onefile',
     '--windowed',
     '--add-data=templates:templates',

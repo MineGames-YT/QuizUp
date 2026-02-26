@@ -1,148 +1,156 @@
 {% extends "base.html" %}
 
-{% block title %}QuizBattle - Командная Викторина{% endblock %}
+{% block title %}QuizUp - командная викторина{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align: center; padding: 40px;">
-    <h1 style="font-size: 36px; margin-bottom: 10px;">QuizBattle</h1>
-    <p style="color: var(--text-secondary); margin-bottom: 30px;">
-        Командная викторина в реальном времени
-    </p>
-</div>
-
-<div class="form-row">
-    <!-- присоединиться к игре -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Присоединиться</h2>
+<div class="card play-card">
+    <div class="play-head">
+        <div>
+            <h1 class="play-title">QuizUp</h1>
+            <p class="play-subtitle">командная викторина в реальном времени</p>
         </div>
-        <form id="joinForm" action="/join" method="POST">
+    </div>
+
+    <div class="play-name">
+        <div class="form-group">
+            <label>ник для игры</label>
+            <input type="text" id="playerName" placeholder="например: игрок" maxlength="20" required>
+            <div class="help-text">это имя увидят другие игроки (и в лобби, и в игре)</div>
+        </div>
+    </div>
+
+    <div class="play-grid">
+        <!-- присоединиться -->
+        <form id="joinForm" action="/join" method="POST" class="play-col">
+            <div class="play-col-head">
+                <h2 class="play-col-title">присоединиться</h2>
+                <div class="play-col-hint">введите pin-код комнаты</div>
+            </div>
+
             <div class="form-group">
-                <label>PIN-код</label>
-                <input type="text" name="pin" id="joinPin" placeholder="ABC123" 
+                <label>pin-код</label>
+                <input type="text" name="pin" id="joinPin" placeholder="abc123"
                        maxlength="6" required style="text-transform: uppercase;">
             </div>
-            <div class="form-group">
-                <label>Ваше имя</label>
-                <input type="text" name="guest_name" id="joinName" 
-                       placeholder="Игрок" maxlength="20" required
-                       value="{{ current_user.username if current_user.is_authenticated else '' }}">
-            </div>
-            <div class="form-group" id="passwordField">
-                <label>Пароль комнаты</label>
-                <input type="password" name="password" id="joinPassword" placeholder="Если есть">
-            </div>
+
+            <input type="hidden" name="guest_name" id="joinName" value="">
+
             <button type="submit" class="btn btn-primary btn-full">
-                Войти в игру
+                войти
             </button>
         </form>
-    </div>
-    
-    <!-- создать игру -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Создать игру</h2>
-        </div>
-        <form id="createForm">
+
+        <!-- создать -->
+        <form id="createForm" class="play-col">
+            <div class="play-col-head">
+                <h2 class="play-col-title">создать</h2>
+                <div class="play-col-hint">настройте игру и откройте лобби</div>
+            </div>
+
             <div class="form-group">
-                <label>Тема</label>
-                <select name="topic" id="gameTopic" required>
-                    <option value="">Выберите тему</option>
-                    {% for topic in topics %}
-                    <option value="{{ topic }}">{{ topic.title() }}</option>
-                    {% endfor %}
-                    <option value="__custom__">своя тема...</option>
-                </select>
+                <label>тема</label>
+
+                <div class="cselect" id="topicSelect" data-placeholder="выберите тему">
+                    <button type="button" class="cselect-trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="cselect-value">выберите тему</span>
+                        <span class="cselect-arrow">▾</span>
+                    </button>
+                    <div class="cselect-menu" role="listbox" tabindex="-1">
+                        {% for topic in topics %}
+                        <div class="cselect-option" role="option" data-value="{{ topic }}">{{ topic.title() }}</div>
+                        {% endfor %}
+                        <div class="cselect-divider"></div>
+                        <div class="cselect-option" role="option" data-value="__custom__">своя тема...</div>
+                    </div>
+                    <input type="hidden" name="topic" id="gameTopicValue" value="">
+                </div>
             </div>
 
             <div class="form-group" id="customTopicField" style="display: none;">
-                <label>Своя тема</label>
+                <label>своя тема</label>
                 <input type="text" id="customTopic" placeholder="например: аниме 2000-х, k-pop, кино 90-х" maxlength="50">
             </div>
-            
+
             <div class="form-row">
                 <div class="form-group">
-                    <label>Режим</label>
-                    <select name="mode" id="gameMode">
-                        <option value="teams">Команды</option>
-                        <option value="ffa">Каждый сам за себя</option>
-                    </select>
+                    <label>режим</label>
+                    <div class="cselect" id="modeSelect" data-placeholder="режим">
+                        <button type="button" class="cselect-trigger" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="cselect-value">команды</span>
+                            <span class="cselect-arrow">▾</span>
+                        </button>
+                        <div class="cselect-menu" role="listbox" tabindex="-1">
+                            <div class="cselect-option" role="option" data-value="teams">команды</div>
+                            <div class="cselect-option" role="option" data-value="ffa">каждый сам за себя</div>
+                        </div>
+                        <input type="hidden" name="mode" id="gameModeValue" value="teams">
+                    </div>
                 </div>
+
                 <div class="form-group">
-                    <label>Сложность</label>
-                    <select name="difficulty" id="gameDifficulty">
-                        <option value="easy">Легко</option>
-                        <option value="medium" selected>Средне</option>
-                        <option value="hard">Сложно</option>
-                    </select>
+                    <label>сложность</label>
+                    <div class="cselect" id="difficultySelect" data-placeholder="сложность">
+                        <button type="button" class="cselect-trigger" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="cselect-value">средне</span>
+                            <span class="cselect-arrow">▾</span>
+                        </button>
+                        <div class="cselect-menu" role="listbox" tabindex="-1">
+                            <div class="cselect-option" role="option" data-value="easy">легко</div>
+                            <div class="cselect-option" role="option" data-value="medium">средне</div>
+                            <div class="cselect-option" role="option" data-value="hard">сложно</div>
+                        </div>
+                        <input type="hidden" name="difficulty" id="gameDifficultyValue" value="medium">
+                    </div>
                 </div>
             </div>
-            
+
             <div class="form-row">
                 <div class="form-group">
-                    <label>Вопросов <span style="color: var(--text-secondary); font-weight: 400;">(на команду)</span></label>
-                    <select name="questions_count" id="gameQuestions">
-                        <option value="5" selected>5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                    </select>
+                    <label>вопросов <span style="color: var(--text-muted); font-weight: 400;">(на команду)</span></label>
+                    <div class="cselect" id="countSelect" data-placeholder="вопросов">
+                        <button type="button" class="cselect-trigger" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="cselect-value">5</span>
+                            <span class="cselect-arrow">▾</span>
+                        </button>
+                        <div class="cselect-menu" role="listbox" tabindex="-1">
+                            <div class="cselect-option" role="option" data-value="5">5</div>
+                            <div class="cselect-option" role="option" data-value="6">6</div>
+                            <div class="cselect-option" role="option" data-value="7">7</div>
+                        </div>
+                        <input type="hidden" name="questions_count" id="gameQuestionsValue" value="5">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Пароль (опционально)</label>
-                    <input type="password" name="password" id="gamePassword" placeholder="Нет">
-                </div>
-            </div>
-            
-
-
-            <div class="form-group">
-                <label>нейросеть для вопросов</label>
-                <select id="aiProvider">
-                    <option value="auto" selected>авто (база → ai)</option>
-                    <option value="gigachat">gigachat</option>
-                    <option value="gemini">gemini</option>
-                    <option value="kimi">kimi</option>
-                    <option value="db">только база</option>
-                </select>
             </div>
 
-            <div class="form-group" id="geminiSearchField" style="display: none; align-items: center; gap: 10px;">
-                <input type="checkbox" id="geminiSearchEnabled" style="width: auto;">
-                <label for="geminiSearchEnabled" style="margin: 0;">искать в интернете (google search)</label>
-            </div>
             <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                <input type="checkbox" id="bonusEnabled" style="width: auto;">
-                <label for="bonusEnabled" style="margin: 0;">Бонус за скорость</label>
+                <input type="checkbox" id="bonusEnabled" style="width: auto;" checked>
+                <label for="bonusEnabled" style="margin: 0;">бонус за скорость</label>
             </div>
-            
+
             <button type="submit" class="btn btn-primary btn-full">
-                Создать игру
+                создать игру
             </button>
         </form>
     </div>
-</div>
 
-<!-- Как играть -->
-<div class="card" style="background: var(--bg-tertiary);">
-    <h3 style="margin-bottom: 15px;">Как играть</h3>
-    <ol style="padding-left: 20px; color: var(--text-secondary);">
-        <li>Создайте игру или присоединитесь по PIN-коду</li>
-        <li>Ожидайте других игроков в лобби</li>
-        <li>Отвечайте на вопросы быстрее соперников</li>
-        <li>Получайте бонусы за скорость</li>
-        <li>Побеждайте и поднимайтесь в рейтинге!</li>
-    </ol>
+    <div class="play-foot">
+        <h3 style="margin-bottom: 12px;">как играть</h3>
+        <ol style="padding-left: 20px; color: var(--text-secondary); margin: 0;">
+            <li>создайте игру или присоединитесь по pin-коду</li>
+            <li>ожидайте других игроков в лобби</li>
+            <li>отвечайте быстрее соперников</li>
+            <li>побеждайте</li>
+        </ol>
+    </div>
 </div>
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
     const socket = io();
 
-    // -------- helpers (token + имя) --------
     function getOrCreatePlayerToken() {
         let token = localStorage.getItem('qb_player_token');
         if (!token) {
-            // crypto.randomUUID есть не везде, поэтому простой фоллбек
             token = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2)));
             localStorage.setItem('qb_player_token', token);
         }
@@ -151,118 +159,104 @@
 
     const playerToken = getOrCreatePlayerToken();
 
-    const joinNameInput = document.getElementById('joinName');
+    const nameInput = document.getElementById('playerName');
+    const joinNameHidden = document.getElementById('joinName');
 
-    // если это гость - подставим сохранённое имя
-    {% if not current_user.is_authenticated %}
-    const storedName = localStorage.getItem('qb_guest_name');
-    if (storedName && !joinNameInput.value) {
-        joinNameInput.value = storedName;
+    function getDefaultName() {
+        const stored = (window.QB_UI?.getStoredPlayerName?.() || '').trim();
+        if (stored) return stored;
+
+        {% if current_user.is_authenticated %}
+        return '{{ current_user.username }}';
+        {% else %}
+        return '';
+        {% endif %}
     }
-    {% endif %}
 
-    joinNameInput.addEventListener('input', function() {
-        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
-    });
+    function syncName() {
+        const val = (nameInput?.value || '').trim();
+        if (window.QB_UI?.setStoredPlayerName) {
+            window.QB_UI.setStoredPlayerName(val);
+        } else {
+            localStorage.setItem('qb_player_name', val);
+            localStorage.setItem('qb_guest_name', val);
+        }
+        joinNameHidden.value = val;
+        return val;
+    }
 
-    document.getElementById('joinForm').addEventListener('submit', function() {
-        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
+    if (nameInput) {
+        nameInput.value = getDefaultName();
+        syncName();
+        nameInput.addEventListener('input', syncName);
+    }
 
-        const pin = (document.getElementById('joinPin').value || '').trim().toUpperCase();
-        const pwd = document.getElementById('joinPassword').value || '';
-        if (pin) {
-            localStorage.setItem('qb_game_password_' + pin, pwd);
+    document.getElementById('joinForm').addEventListener('submit', function(e) {
+        const val = syncName();
+        if (!val) {
+            e.preventDefault();
+            QB_UI.toast('укажи ник', 'warning');
+            return;
         }
     });
 
-
-
-    // -------- ai провайдер --------
-    const aiProviderSelect = document.getElementById('aiProvider');
-    const geminiSearchField = document.getElementById('geminiSearchField');
-    const geminiSearchEnabled = document.getElementById('geminiSearchEnabled');
-
-    // сохраняем выбор, чтобы каждый раз не тыкать
-    const savedProvider = localStorage.getItem('qb_ai_provider');
-    if (savedProvider) {
-        aiProviderSelect.value = savedProvider;
-    }
-
-    const savedGeminiSearch = localStorage.getItem('qb_gemini_search');
-    if (savedGeminiSearch === '1') {
-        geminiSearchEnabled.checked = true;
-    }
-
-    function updateGeminiSearchVisibility() {
-        const show = aiProviderSelect.value === 'gemini';
-        geminiSearchField.style.display = show ? 'flex' : 'none';
-    }
-
-    aiProviderSelect.addEventListener('change', function() {
-        localStorage.setItem('qb_ai_provider', aiProviderSelect.value);
-        updateGeminiSearchVisibility();
-    });
-
-    geminiSearchEnabled.addEventListener('change', function() {
-        localStorage.setItem('qb_gemini_search', geminiSearchEnabled.checked ? '1' : '0');
-    });
-
-    updateGeminiSearchVisibility();
-    // -------- своя тема --------
-    const topicSelect = document.getElementById('gameTopic');
+    // своя тема
+    const topicSelect = document.getElementById('topicSelect');
     const customTopicField = document.getElementById('customTopicField');
     const customTopicInput = document.getElementById('customTopic');
+    const topicHidden = document.getElementById('gameTopicValue');
 
-    topicSelect.addEventListener('change', function() {
-        const isCustom = topicSelect.value === '__custom__';
+    function updateCustomTopicVisibility() {
+        const isCustom = (topicHidden.value === '__custom__');
         customTopicField.style.display = isCustom ? 'block' : 'none';
-        if (isCustom) customTopicInput.focus();
-    });
+        if (isCustom) {
+            setTimeout(() => customTopicInput.focus(), 0);
+        }
+    }
+
+    if (topicSelect) {
+        topicSelect.addEventListener('cselect:change', updateCustomTopicVisibility);
+    }
+    updateCustomTopicVisibility();
 
     // создание игры через websocket
     document.getElementById('createForm').addEventListener('submit', function(e) {
         e.preventDefault();
 
-        let topic = topicSelect.value;
-        if (topic === '__custom__') {
-            topic = customTopicInput.value;
-        }
-
-        topic = (topic || '').trim();
-        if (!topic) {
-            alert('укажи тему для игры');
+        const nick = syncName();
+        if (!nick) {
+            QB_UI.toast('укажи ник', 'warning');
             return;
         }
 
-        const pendingPassword = document.getElementById('gamePassword').value;
-        window.__pending_game_password = pendingPassword;
+        let topic = (topicHidden.value || '').trim();
+        if (topic === '__custom__') {
+            topic = (customTopicInput.value || '').trim();
+        }
+
+        if (!topic) {
+            QB_UI.toast('укажи тему для игры', 'warning');
+            return;
+        }
 
         const data = {
             topic: topic,
-            mode: document.getElementById('gameMode').value,
-            difficulty: document.getElementById('gameDifficulty').value,
-            questions_count: document.getElementById('gameQuestions').value,
-            has_password: !!document.getElementById('gamePassword').value,
-            password: document.getElementById('gamePassword').value,
+            mode: (document.getElementById('gameModeValue').value || 'teams'),
+            difficulty: (document.getElementById('gameDifficultyValue').value || 'medium'),
+            questions_count: (document.getElementById('gameQuestionsValue').value || '5'),
             bonus_enabled: document.getElementById('bonusEnabled').checked,
-            player_token: playerToken,
-            ai_provider: aiProviderSelect.value,
-            gemini_search_enabled: geminiSearchEnabled.checked
+            player_token: playerToken
         };
 
         socket.emit('create_game', data);
     });
 
     socket.on('game_created', function(data) {
-        const pwd = window.__pending_game_password || '';
-        if (pwd) {
-            localStorage.setItem('qb_game_password_' + data.pin, pwd);
-        }
         window.location.href = '/lobby?pin=' + data.pin;
     });
 
     socket.on('error_message', function(data) {
-        alert(data.message);
+        QB_UI.toast(data.message, 'error', 4500);
     });
 </script>
 {% endblock %}

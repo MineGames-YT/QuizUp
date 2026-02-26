@@ -1,33 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Профиль - QuizBattle{% endblock %}
+{% block title %}Профиль - QuizUp{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="card-header">
         <h2 class="card-title">Профиль: {{ current_user.username }}</h2>
-        <span class="badge badge-admin">Место в рейтинге: {{ rank }}</span>
     </div>
-    
-    <div class="form-row" style="text-align: center; margin-bottom: 20px;">
-        <div class="card" style="background: var(--bg-tertiary);">
-            <div style="font-size: 32px; font-weight: 800; color: var(--accent-primary);">
-                {{ current_user.rating }}
-            </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Рейтинг</div>
-        </div>
-        <div class="card" style="background: var(--bg-tertiary);">
-            <div style="font-size: 32px; font-weight: 800; color: var(--success);">
-                {{ current_user.total_games }}
-            </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Игр сыграно</div>
-        </div>
-        <div class="card" style="background: var(--bg-tertiary);">
-            <div style="font-size: 32px; font-weight: 800; color: var(--warning);">
-                {{ current_user.total_wins }}
-            </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Побед</div>
-        </div>
+    <div style="color: var(--text-muted); margin-top: 6px;">
+        здесь хранится история твоих игр
     </div>
 </div>
 
