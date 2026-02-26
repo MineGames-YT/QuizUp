@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль - QuizBattle{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Профиль: {{ current_user.username }}</h2>
+        <span class="badge badge-admin">Место в рейтинге: {{ rank }}</span>
+    </div>
+    
+    <div class="form-row" style="text-align: center; margin-bottom: 20px;">
+        <div class="card" style="background: var(--bg-tertiary);">
+            <div style="font-size: 32px; font-weight: 800; color: var(--accent-primary);">
+                {{ current_user.rating }}
+            </div>
+            <div style="color: var(--text-muted); font-size: 13px;">Рейтинг</div>
+        </div>
+        <div class="card" style="background: var(--bg-tertiary);">
+            <div style="font-size: 32px; font-weight: 800; color: var(--success);">
+                {{ current_user.total_games }}
+            </div>
+            <div style="color: var(--text-muted); font-size: 13px;">Игр сыграно</div>
+        </div>
+        <div class="card" style="background: var(--bg-tertiary);">
+            <div style="font-size: 32px; font-weight: 800; color: var(--warning);">
+                {{ current_user.total_wins }}
+            </div>
+            <div style="color: var(--text-muted); font-size: 13px;">Побед</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">История игр</h3>
+    </div>
+    
+    {% if stats %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Тема</th>
+                <th>Режим</th>
+                <th>Очки</th>
+                <th>Правильно</th>
+                <th>Среднее время</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in stats %}
+            <tr>
+                <td>{{ s.game.topic }}</td>
+                <td>{{ 'Команды' if s.game.mode == 'teams' else 'FFA' }}</td>
+                <td><strong>{{ s.score }}</strong></td>
+                <td>{{ s.correct_answers }}/{{ s.correct_answers + s.wrong_answers }}</td>
+                <td>{{ "%.2f"|format(s.avg_response_time) }}с</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: var(--text-muted);">Пока нет игр</p>
+    {% endif %}
+</div>
+{% endblock %}

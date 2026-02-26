@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Игра - QuizBattle{% endblock %}
+
+{% block content %}
+<!-- Таймер и счет -->
+<div class="game-header">
+    <div class="score-display" style="margin: 0;">
+        <div class="score-team" id="teamADisplay">
+            <div class="score-team-name">Команда А</div>
+            <div class="score-team-value" id="scoreA" style="color: var(--danger);">0</div>
+        </div>
+    </div>
+    
+    <div class="game-timer">
+        <div class="timer-value" id="timer">30</div>
+        <div style="font-size: 13px; color: var(--text-muted);">Секунд</div>
+    </div>
+    
+    <div class="score-display" style="margin: 0;">
+        <div class="score-team" id="teamBDisplay">
+            <div class="score-team-name">Команда Б</div>
+            <div class="score-team-value" id="scoreB" style="color: var(--success);">0</div>
+        </div>
+    </div>
+</div>
+
+<!-- прогресс -->
+<div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+</div>
+<div style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
+    Вопрос <span id="currentQ">1</span> из <span id="totalQ">10</span>
+</div>
+
+<!-- Вопрос -->
+<div class="question-box" id="questionBox">
+    <div class="question-number">Вопрос</div>
+    <div class="question-text" id="questionText">Загрузка...</div>
+</div>
+
+<!-- Варианты ответов -->
+<div class="options-grid" id="optionsGrid">
+    <button class="option-btn" data-index="0" onclick="submitAnswer(0)">
+        <span class="option-letter">A</span>
+        <span id="opt0">...</span>
+    </button>
+    <button class="option-btn" data-index="1" onclick="submitAnswer(1)">
+        <span class="option-letter">B</span>
+        <span id="opt1">...</span>
+    </button>
+    <button class="option-btn" data-index="2" onclick="submitAnswer(2)">
+        <span class="option-letter">C</span>
+        <span id="opt2">...</span>
+    </button>
+    <button class="option-btn" data-index="3" onclick="submitAnswer(3)">
+        <span class="option-letter">D</span>
+        <span id="opt3">...</span>
+    </button>
+</div>
+
+<!-- статус -->
+<div id="statusBar" style="text-align: center; margin-top: 20px; font-weight: 600;"></div>
+
+<!-- Оверлей ожидания -->
+<div class="waiting-overlay" id="waitingOverlay" style="display: none;">
+    <div class="waiting-content">
+        <div class="spinner"></div>
+        <p>Ожидаем других игроков...</p>
+    </div>
+</div>
+
+<!-- Модал результатов -->
+<div class="modal-overlay" id="resultsModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Игра окончена!</h2>
+        </div>
+        <div class="modal-body">
+            <div class="winner-display" id="winnerText"></div>
+            
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>Место</th>
+                        <th>Игрок</th>
+                        <th>Очки</th>
+                        <th>Правильно</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <a href="/" class="btn btn-primary">На главную</a>
+            <button class="btn btn-secondary" onclick="exportResults()">Скачать результаты</button>
+        </div>
+    </div>
+</div>
+
+<!-- Панель админа (только для создателя) -->
+<div class="admin-panel" id="adminPanel" style="display: none;">
+    <button class="btn btn-secondary admin-btn" onclick="pauseGame()">Пауза</button>
+    <button class="btn btn-secondary admin-btn" onclick="skipQuestion()">Пропустить</button>
+    <button class="btn btn-danger admin-btn" onclick="endGame()">Завершить</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const gamePin = (urlParams.get('pin') || '').toUpperCase();
+
+    let timerInterval;
+    let isMyTurn = false;
+    let hasAnswered = false;
+    let myTeam = null;
+    let isCreator = false;
+    let myToken = '';
+    let myName = '';
+    let gameMode = 'teams';
+
+    function getOrCreatePlayerToken() {
+        let token = localStorage.getItem('qb_player_token');
+        if (!token) {
+            token = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2)));
+            localStorage.setItem('qb_player_token', token);
+        }
+        return token;
+    }
+
+    function getGuestName() {
+        {% if current_user.is_authenticated %}
+        return '{{ current_user.username }}';
+        {% else %}
+        return (localStorage.getItem('qb_guest_name') || '').trim();
+        {% endif %}
+    }
+
+    myToken = getOrCreatePlayerToken();
+    myName = getGuestName();
+
+    if (!gamePin) {
+        window.location.href = '/';
+    }
+
+    socket.on('connect', function() {
+        const roomPassword = localStorage.getItem('qb_game_password_' + gamePin) || '';
+        socket.emit('join_game', {
+            pin: gamePin,
+            guest_name: myName,
+            player_token: myToken,
+            password: roomPassword
+        });
+    });
+
+    socket.on('joined', function(data) {
+        gameMode = data.mode;
+        myTeam = data.team;
+        isCreator = !!data.is_creator;
+
+        // ведущему показываем панель
+        if (isCreator) {
+            document.getElementById('adminPanel').style.display = 'flex';
+        }
+
+        // если ffa - скрываем командный счёт
+        if (gameMode === 'ffa') {
+            document.getElementById('teamADisplay').style.display = 'none';
+            document.getElementById('teamBDisplay').style.display = 'none';
+        }
+
+        // синхронизируем счёт сразу
+        if (data.leaderboard && data.leaderboard.A !== undefined) {
+            document.getElementById('scoreA').textContent = data.leaderboard.A;
+            document.getElementById('scoreB').textContent = data.leaderboard.B;
+        }
+
+        // просим текущий вопрос (на случай, если мы зашли не с самого старта)
+        socket.emit('get_question', { pin: gamePin });
+    });
+
+    socket.on('question', function(data) {
+        // обновляем вопрос
+        document.getElementById('questionText').textContent = data.question;
+        document.getElementById('currentQ').textContent = data.question_number;
+        document.getElementById('totalQ').textContent = data.total;
+
+        // варианты
+        data.options.forEach((opt, i) => {
+            document.getElementById('opt' + i).textContent = opt;
+        });
+
+        // сброс
+        hasAnswered = false;
+        document.querySelectorAll('.option-btn').forEach(btn => {
+            btn.classList.remove('correct', 'wrong');
+            btn.disabled = false;
+        });
+        document.getElementById('statusBar').textContent = '';
+        document.getElementById('waitingOverlay').style.display = 'none';
+
+        // прогресс
+        const progress = (data.question_number / data.total) * 100;
+        document.getElementById('progressFill').style.width = progress + '%';
+
+        // счёт (если прилетел)
+        if (data.leaderboard && data.leaderboard.A !== undefined) {
+            document.getElementById('scoreA').textContent = data.leaderboard.A;
+            document.getElementById('scoreB').textContent = data.leaderboard.B;
+        }
+
+        // таймер показываем всем (удобнее следить за ходом)
+        startTimer(data.time_left || 30);
+
+        // очередь
+        isMyTurn = data.is_your_turn !== false;
+
+        if (!isMyTurn) {
+            document.getElementById('waitingOverlay').style.display = 'flex';
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+
+            if (gameMode === 'teams' && data.current_team) {
+                document.getElementById('statusBar').textContent =
+                    'ход команды ' + (data.current_team === 'A' ? 'а' : 'б');
+                document.getElementById('statusBar').style.color =
+                    data.current_team === 'A' ? 'var(--danger)' : 'var(--success)';
+            }
+        } else {
+            // мой ход: можно отвечать
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
+        }
+    });
+
+    socket.on('round_locked', function(data) {
+        // если кто-то из моей команды уже ответил - закрываем кнопки у остальных
+        if (gameMode !== 'teams') return;
+
+        if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
+            hasAnswered = true;
+            isMyTurn = false;
+
+            clearInterval(timerInterval);
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+
+            document.getElementById('waitingOverlay').style.display = 'flex';
+
+            const msg = data.correct ?
+                `${data.answered_by} ответил верно!` :
+                `${data.answered_by} ошибся`;
+            document.getElementById('statusBar').textContent = msg;
+            document.getElementById('statusBar').style.color = data.correct ? 'var(--success)' : 'var(--danger)';
+        }
+    });
+
+    socket.on('score_update', function(data) {
+        // счёт
+        if (data.leaderboard && data.leaderboard.A !== undefined) {
+            document.getElementById('scoreA').textContent = data.leaderboard.A;
+            document.getElementById('scoreB').textContent = data.leaderboard.B;
+        }
+
+        // кто ответил
+        const status = data.is_correct ?
+            `${data.answered_by} ответил верно!` :
+            `${data.answered_by} ошибся`;
+
+        document.getElementById('statusBar').textContent = status;
+        document.getElementById('statusBar').style.color = data.is_correct ?
+            'var(--success)' : 'var(--danger)';
+    });
+
+    socket.on('answer_result', function(data) {
+        hasAnswered = true;
+        isMyTurn = false;
+        clearInterval(timerInterval);
+
+        // подсветка
+        const btn = document.querySelector(`[data-index="${data.answer}"]`);
+        if (btn) btn.classList.add(data.correct ? 'correct' : 'wrong');
+
+        // звук
+        playSound(data.correct ? 'correct' : 'wrong');
+
+        // блок
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+        document.getElementById('waitingOverlay').style.display = 'flex';
+    });
+
+    socket.on('time_up', function() {
+        clearInterval(timerInterval);
+
+        document.getElementById('statusBar').textContent = 'время вышло!';
+        document.getElementById('statusBar').style.color = 'var(--danger)';
+
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+        document.getElementById('waitingOverlay').style.display = 'flex';
+    });
+
+    socket.on('next_question_ready', function() {
+        socket.emit('get_question', { pin: gamePin });
+    });
+
+    socket.on('game_finished', function(data) {
+        clearInterval(timerInterval);
+        playSound('end');
+
+        const modal = document.getElementById('resultsModal');
+        modal.style.display = 'flex';
+
+        // победитель
+        const winnerText = document.getElementById('winnerText');
+        if (data.mode === 'teams') {
+            if (data.winner === 'draw') {
+                winnerText.textContent = 'ничья!';
+                winnerText.style.color = 'var(--warning)';
+            } else {
+                winnerText.textContent = `победила команда ${data.winner === 'A' ? 'а' : 'б'}!`;
+                winnerText.style.color = data.winner === 'A' ? 'var(--danger)' : 'var(--success)';
+            }
+        } else {
+            winnerText.textContent = `победитель: ${data.winner}`;
+        }
+
+        // таблица
+        const tbody = document.getElementById('resultsTable');
+        tbody.innerHTML = (data.stats || []).map((s, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${s.name}</td>
+                <td><strong>${s.score}</strong></td>
+                <td>${s.correct}/${s.correct + s.wrong}</td>
+            </tr>
+        `).join('');
+    });
+
+    socket.on('error_message', function(data) {
+        alert(data.message);
+    });
+
+    function startTimer(seconds) {
+        clearInterval(timerInterval);
+
+        let timeLeft = seconds;
+        const timerEl = document.getElementById('timer');
+
+        timerEl.textContent = timeLeft;
+        timerEl.classList.remove('warning', 'danger');
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerEl.textContent = timeLeft;
+
+            if (timeLeft <= 5) {
+                timerEl.classList.add('danger');
+                playSound('tick');
+            } else if (timeLeft <= 10) {
+                timerEl.classList.add('warning');
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+            }
+        }, 1000);
+    }
+
+    function submitAnswer(index) {
+        if (hasAnswered || !isMyTurn) return;
+
+        hasAnswered = true;
+        clearInterval(timerInterval);
+
+        document.querySelectorAll('.option-btn').forEach(btn => {
+            btn.disabled = true;
+        });
+
+        socket.emit('submit_answer', {
+            pin: gamePin,
+            answer: index
+        });
+    }
+
+    function exportResults() {
+        window.open(`/api/game/${gamePin}/export`, '_blank');
+    }
+
+    // админ функции
+    function pauseGame() {
+        socket.emit('admin_pause', { pin: gamePin, player_token: myToken });
+    }
+
+    function skipQuestion() {
+        socket.emit('admin_skip', { pin: gamePin, player_token: myToken });
+    }
+
+    function endGame() {
+        if (confirm('завершить игру?')) {
+            socket.emit('admin_end', { pin: gamePin, player_token: myToken });
+        }
+    }
+
+    socket.on('game_paused', function() {
+        alert('игра на паузе');
+    });
+
+    socket.on('game_resumed', function() {
+        // просто синхронизируем вопрос (таймер стартанёт заново)
+        socket.emit('get_question', { pin: gamePin });
+    });
+</script>
+{% endblock %}

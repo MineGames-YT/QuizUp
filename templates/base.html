@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}QuizBattle{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Переключатель темы -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="сменить тему">
+        <span id="theme-icon">🌙</span>
+    </button>
+    
+    <!-- Навигация -->
+    <div class="container">
+        <nav class="nav">
+            <a href="{{ url_for('index') }}" class="nav-logo">QuizBattle</a>
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}">Играть</a>
+                <a href="{{ url_for('rating') }}">Рейтинг</a>
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('profile') }}">Профиль</a>
+                    <div class="user-menu">
+                        <span>{{ current_user.username }}</span>
+                        <a href="{{ url_for('logout') }}">Выйти</a>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('login') }}">Вход</a>
+                    <a href="{{ url_for('register') }}">Регистрация</a>
+                {% endif %}
+            </div>
+        </nav>
+        
+        <!-- Флеш сообщения -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-error">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Основной контент -->
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Звуковые эффекты -->
+    <audio id="sound-tick" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/tick.mp3') }}" type="audio/mpeg">
+    </audio>
+    <audio id="sound-correct" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/correct.mp3') }}" type="audio/mpeg">
+    </audio>
+    <audio id="sound-wrong" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/wrong.mp3') }}" type="audio/mpeg">
+    </audio>
+    <audio id="sound-start" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/start.mp3') }}" type="audio/mpeg">
+    </audio>
+    <audio id="sound-end" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/end.mp3') }}" type="audio/mpeg">
+    </audio>
+    
+    <script>
+        // Переключение темы
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            
+            if (html.getAttribute('data-theme') === 'dark') {
+                html.setAttribute('data-theme', 'light');
+                icon.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                icon.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+        
+        // Загрузка темы при старте
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('theme-icon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        
+        // Воспроизведение звука
+        function playSound(name) {
+            const sound = document.getElementById('sound-' + name);
+            if (sound) {
+                sound.currentTime = 0;
+                sound.volume = 0.5;
+                sound.play().catch(e => console.log('звук заблокирован:', e));
+            }
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

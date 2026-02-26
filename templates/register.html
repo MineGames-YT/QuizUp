@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация - QuizBattle{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 40px auto;">
+    <div class="card-header" style="text-align: center;">
+        <h2 class="card-title">Регистрация</h2>
+    </div>
+    
+    <form method="POST" action="{{ url_for('register') }}">
+        <div class="form-group">
+            <label>Имя пользователя</label>
+            <input type="text" name="username" required autofocus minlength="3" maxlength="20">
+        </div>
+        
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" name="password" required minlength="6">
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-full">Зарегистрироваться</button>
+    </form>
+    
+    <div style="text-align: center; margin-top: 20px; color: var(--text-muted); font-size: 14px;">
+        Уже есть аккаунт? <a href="{{ url_for('login') }}" style="color: var(--accent-primary);">Войти</a>
+    </div>
+</div>
+{% endblock %}

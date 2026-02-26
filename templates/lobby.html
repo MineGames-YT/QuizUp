@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Лобби - QuizBattle{% endblock %}
+
+{% block content %}
+<!-- PIN код -->
+<div class="pin-display">
+    <div class="pin-label">PIN-код игры</div>
+    <div class="pin-code" id="gamePin">------</div>
+    <button class="btn btn-secondary" style="margin-top: 15px;" onclick="copyPin()">
+        Копировать
+    </button>
+</div>
+
+<!-- информация об игре -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title" id="gameTopic">загрузка...</h2>
+            <span id="gameSettings" style="color: var(--text-muted); font-size: 13px;"></span>
+        </div>
+        <span class="badge" id="gameModeBadge">команды</span>
+    </div>
+    
+    <!-- Команды -->
+    <div class="teams-grid" id="teamsContainer">
+        <div class="team-box team-a">
+            <div class="team-header">
+                <span class="team-name">Команда А</span>
+                <span class="team-score" id="scoreA">0</span>
+            </div>
+            <ul class="player-list" id="teamAList">
+                <li style="color: var(--text-muted); text-align: center; padding: 20px;">
+                    Ожидание...
+                </li>
+            </ul>
+        </div>
+        
+        <div class="vs-divider">VS</div>
+        
+        <div class="team-box team-b">
+            <div class="team-header">
+                <span class="team-name">Команда Б</span>
+                <span class="team-score" id="scoreB">0</span>
+            </div>
+            <ul class="player-list" id="teamBList">
+                <li style="color: var(--text-muted); text-align: center; padding: 20px;">
+                    Ожидание...
+                </li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- FFA режим -->
+    <div id="ffaContainer" style="display: none;">
+        <ul class="player-list" id="ffaList"></ul>
+    </div>
+    
+    <!-- кнопки управления -->
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="startBtn" class="btn btn-primary btn-large" style="display: none;" onclick="startGame()">
+            начать игру
+        </button>
+        <p id="waitingText" style="color: var(--text-muted); margin-top: 10px;">
+            ожидание игроков...
+        </p>
+    </div>
+</div>
+
+<!-- список игроков для админа (с возможностью кика) -->
+<div class="card" id="adminPanel" style="display: none;">
+    <div class="card-header">
+        <h3 class="card-title">управление игроками</h3>
+    </div>
+    <div id="adminPlayerList"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    const socket = io();
+    let gamePin = '';
+    let isCreator = false;
+    let gameMode = 'teams';
+    let myName = '';
+    let myToken = '';
+
+    // helpers
+    function getOrCreatePlayerToken() {
+        let token = localStorage.getItem('qb_player_token');
+        if (!token) {
+            token = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2)));
+            localStorage.setItem('qb_player_token', token);
+        }
+        return token;
+    }
+
+    function getGuestName() {
+        {% if current_user.is_authenticated %}
+        return '{{ current_user.username }}';
+        {% else %}
+        return (localStorage.getItem('qb_guest_name') || '').trim();
+        {% endif %}
+    }
+
+    myToken = getOrCreatePlayerToken();
+    myName = getGuestName();
+
+    // получаем pin из url
+    const urlParams = new URLSearchParams(window.location.search);
+    gamePin = (urlParams.get('pin') || '').toUpperCase();
+
+    if (!gamePin) {
+        window.location.href = '/';
+    }
+
+    document.getElementById('gamePin').textContent = gamePin;
+
+    socket.on('connect', function() {
+        const roomPassword = localStorage.getItem('qb_game_password_' + gamePin) || '';
+        socket.emit('join_game', {
+            pin: gamePin,
+            guest_name: myName,
+            player_token: myToken,
+            password: roomPassword
+        });
+    });
+
+    socket.on('joined', function(data) {
+        gameMode = data.mode;
+        isCreator = !!data.is_creator;
+        myName = data.name; // сервер может нормализовать
+
+        if (data.mode === 'ffa') {
+            document.getElementById('teamsContainer').style.display = 'none';
+            document.getElementById('ffaContainer').style.display = 'block';
+            document.getElementById('gameModeBadge').textContent = 'все против всех';
+        } else {
+            document.getElementById('gameModeBadge').textContent = 'команды';
+        }
+
+        document.getElementById('gameTopic').textContent = data.topic;
+
+        if (data.mode === 'teams') {
+            document.getElementById('gameSettings').textContent =
+                data.difficulty + ' • ' + data.questions_per_team + ' вопросов на команду • ' + data.time_limit + ' сек';
+        } else {
+            document.getElementById('gameSettings').textContent =
+                data.difficulty + ' • ' + data.questions_count + ' вопросов • ' + data.time_limit + ' сек';
+        }
+
+        updatePlayerList(data.players);
+    });
+
+    socket.on('player_joined', function(data) {
+        updatePlayerList(data.players);
+
+        if (data.players.length >= 2) {
+            document.getElementById('waitingText').textContent = 'можно начинать';
+        } else {
+            document.getElementById('waitingText').textContent = 'ожидание игроков...';
+        }
+    });
+
+    socket.on('player_left', function(data) {
+        updatePlayerList(data.players);
+
+        if (data.players.length < 2) {
+            document.getElementById('waitingText').textContent = 'ожидание игроков...';
+        }
+    });
+
+    socket.on('game_started', function() {
+        playSound('start');
+        window.location.href = '/game?pin=' + gamePin;
+    });
+
+    socket.on('error_message', function(data) {
+        alert(data.message);
+    });
+
+    function updatePlayerList(players) {
+        // команды
+        const teamA = players.filter(p => p.team === 'A');
+        const teamB = players.filter(p => p.team === 'B');
+
+        const listA = document.getElementById('teamAList');
+        if (teamA.length === 0) {
+            listA.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 20px;">ожидание...</li>';
+        } else {
+            listA.innerHTML = teamA.map(p => `
+                <li class="player-item">
+                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
+                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                </li>
+            `).join('');
+        }
+
+        const listB = document.getElementById('teamBList');
+        if (teamB.length === 0) {
+            listB.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 20px;">ожидание...</li>';
+        } else {
+            listB.innerHTML = teamB.map(p => `
+                <li class="player-item">
+                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
+                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                </li>
+            `).join('');
+        }
+
+        // ffa
+        if (gameMode === 'ffa') {
+            document.getElementById('ffaList').innerHTML = players.map(p => `
+                <li class="player-item">
+                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
+                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                </li>
+            `).join('');
+        }
+
+        // кнопка старта только у ведущего
+        const canStart = isCreator && players.length >= 2;
+        document.getElementById('startBtn').style.display = canStart ? 'inline-flex' : 'none';
+    }
+
+    function startGame() {
+        socket.emit('start_game', { pin: gamePin, player_token: myToken });
+    }
+
+    function copyPin() {
+        navigator.clipboard.writeText(gamePin).then(() => {
+            alert('pin скопирован: ' + gamePin);
+        });
+    }
+</script>
+{% endblock %}

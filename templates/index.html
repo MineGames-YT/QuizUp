@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}QuizBattle - Командная Викторина{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h1 style="font-size: 36px; margin-bottom: 10px;">QuizBattle</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 30px;">
+        Командная викторина в реальном времени
+    </p>
+</div>
+
+<div class="form-row">
+    <!-- присоединиться к игре -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Присоединиться</h2>
+        </div>
+        <form id="joinForm" action="/join" method="POST">
+            <div class="form-group">
+                <label>PIN-код</label>
+                <input type="text" name="pin" id="joinPin" placeholder="ABC123" 
+                       maxlength="6" required style="text-transform: uppercase;">
+            </div>
+            <div class="form-group">
+                <label>Ваше имя</label>
+                <input type="text" name="guest_name" id="joinName" 
+                       placeholder="Игрок" maxlength="20" required
+                       value="{{ current_user.username if current_user.is_authenticated else '' }}">
+            </div>
+            <div class="form-group" id="passwordField">
+                <label>Пароль комнаты</label>
+                <input type="password" name="password" id="joinPassword" placeholder="Если есть">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">
+                Войти в игру
+            </button>
+        </form>
+    </div>
+    
+    <!-- создать игру -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Создать игру</h2>
+        </div>
+        <form id="createForm">
+            <div class="form-group">
+                <label>Тема</label>
+                <select name="topic" id="gameTopic" required>
+                    <option value="">Выберите тему</option>
+                    {% for topic in topics %}
+                    <option value="{{ topic }}">{{ topic.title() }}</option>
+                    {% endfor %}
+                    <option value="__custom__">своя тема...</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="customTopicField" style="display: none;">
+                <label>Своя тема</label>
+                <input type="text" id="customTopic" placeholder="например: аниме 2000-х, k-pop, кино 90-х" maxlength="50">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Режим</label>
+                    <select name="mode" id="gameMode">
+                        <option value="teams">Команды</option>
+                        <option value="ffa">Каждый сам за себя</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Сложность</label>
+                    <select name="difficulty" id="gameDifficulty">
+                        <option value="easy">Легко</option>
+                        <option value="medium" selected>Средне</option>
+                        <option value="hard">Сложно</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Вопросов <span style="color: var(--text-secondary); font-weight: 400;">(на команду)</span></label>
+                    <select name="questions_count" id="gameQuestions">
+                        <option value="5" selected>5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Пароль (опционально)</label>
+                    <input type="password" name="password" id="gamePassword" placeholder="Нет">
+                </div>
+            </div>
+            
+
+
+            <div class="form-group">
+                <label>нейросеть для вопросов</label>
+                <select id="aiProvider">
+                    <option value="auto" selected>авто (база → ai)</option>
+                    <option value="gigachat">gigachat</option>
+                    <option value="gemini">gemini</option>
+                    <option value="kimi">kimi</option>
+                    <option value="db">только база</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="geminiSearchField" style="display: none; align-items: center; gap: 10px;">
+                <input type="checkbox" id="geminiSearchEnabled" style="width: auto;">
+                <label for="geminiSearchEnabled" style="margin: 0;">искать в интернете (google search)</label>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="bonusEnabled" style="width: auto;">
+                <label for="bonusEnabled" style="margin: 0;">Бонус за скорость</label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-full">
+                Создать игру
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Как играть -->
+<div class="card" style="background: var(--bg-tertiary);">
+    <h3 style="margin-bottom: 15px;">Как играть</h3>
+    <ol style="padding-left: 20px; color: var(--text-secondary);">
+        <li>Создайте игру или присоединитесь по PIN-коду</li>
+        <li>Ожидайте других игроков в лобби</li>
+        <li>Отвечайте на вопросы быстрее соперников</li>
+        <li>Получайте бонусы за скорость</li>
+        <li>Побеждайте и поднимайтесь в рейтинге!</li>
+    </ol>
+</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    const socket = io();
+
+    // -------- helpers (token + имя) --------
+    function getOrCreatePlayerToken() {
+        let token = localStorage.getItem('qb_player_token');
+        if (!token) {
+            // crypto.randomUUID есть не везде, поэтому простой фоллбек
+            token = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2)));
+            localStorage.setItem('qb_player_token', token);
+        }
+        return token;
+    }
+
+    const playerToken = getOrCreatePlayerToken();
+
+    const joinNameInput = document.getElementById('joinName');
+
+    // если это гость - подставим сохранённое имя
+    {% if not current_user.is_authenticated %}
+    const storedName = localStorage.getItem('qb_guest_name');
+    if (storedName && !joinNameInput.value) {
+        joinNameInput.value = storedName;
+    }
+    {% endif %}
+
+    joinNameInput.addEventListener('input', function() {
+        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
+    });
+
+    document.getElementById('joinForm').addEventListener('submit', function() {
+        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
+
+        const pin = (document.getElementById('joinPin').value || '').trim().toUpperCase();
+        const pwd = document.getElementById('joinPassword').value || '';
+        if (pin) {
+            localStorage.setItem('qb_game_password_' + pin, pwd);
+        }
+    });
+
+
+
+    // -------- ai провайдер --------
+    const aiProviderSelect = document.getElementById('aiProvider');
+    const geminiSearchField = document.getElementById('geminiSearchField');
+    const geminiSearchEnabled = document.getElementById('geminiSearchEnabled');
+
+    // сохраняем выбор, чтобы каждый раз не тыкать
+    const savedProvider = localStorage.getItem('qb_ai_provider');
+    if (savedProvider) {
+        aiProviderSelect.value = savedProvider;
+    }
+
+    const savedGeminiSearch = localStorage.getItem('qb_gemini_search');
+    if (savedGeminiSearch === '1') {
+        geminiSearchEnabled.checked = true;
+    }
+
+    function updateGeminiSearchVisibility() {
+        const show = aiProviderSelect.value === 'gemini';
+        geminiSearchField.style.display = show ? 'flex' : 'none';
+    }
+
+    aiProviderSelect.addEventListener('change', function() {
+        localStorage.setItem('qb_ai_provider', aiProviderSelect.value);
+        updateGeminiSearchVisibility();
+    });
+
+    geminiSearchEnabled.addEventListener('change', function() {
+        localStorage.setItem('qb_gemini_search', geminiSearchEnabled.checked ? '1' : '0');
+    });
+
+    updateGeminiSearchVisibility();
+    // -------- своя тема --------
+    const topicSelect = document.getElementById('gameTopic');
+    const customTopicField = document.getElementById('customTopicField');
+    const customTopicInput = document.getElementById('customTopic');
+
+    topicSelect.addEventListener('change', function() {
+        const isCustom = topicSelect.value === '__custom__';
+        customTopicField.style.display = isCustom ? 'block' : 'none';
+        if (isCustom) customTopicInput.focus();
+    });
+
+    // создание игры через websocket
+    document.getElementById('createForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        let topic = topicSelect.value;
+        if (topic === '__custom__') {
+            topic = customTopicInput.value;
+        }
+
+        topic = (topic || '').trim();
+        if (!topic) {
+            alert('укажи тему для игры');
+            return;
+        }
+
+        const pendingPassword = document.getElementById('gamePassword').value;
+        window.__pending_game_password = pendingPassword;
+
+        const data = {
+            topic: topic,
+            mode: document.getElementById('gameMode').value,
+            difficulty: document.getElementById('gameDifficulty').value,
+            questions_count: document.getElementById('gameQuestions').value,
+            has_password: !!document.getElementById('gamePassword').value,
+            password: document.getElementById('gamePassword').value,
+            bonus_enabled: document.getElementById('bonusEnabled').checked,
+            player_token: playerToken,
+            ai_provider: aiProviderSelect.value,
+            gemini_search_enabled: geminiSearchEnabled.checked
+        };
+
+        socket.emit('create_game', data);
+    });
+
+    socket.on('game_created', function(data) {
+        const pwd = window.__pending_game_password || '';
+        if (pwd) {
+            localStorage.setItem('qb_game_password_' + data.pin, pwd);
+        }
+        window.location.href = '/lobby?pin=' + data.pin;
+    });
+
+    socket.on('error_message', function(data) {
+        alert(data.message);
+    });
+</script>
+{% endblock %}
