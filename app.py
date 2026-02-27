@@ -108,8 +108,18 @@ active_games = {}
 games_lock = threading.Lock()
 
 TOPICS = [
-    'история', 'наука', 'география', 'спорт', 'кино и музыка',
-    'технологии', 'литература', 'биология', 'космос', 'видеоигры'
+    'история',
+    'наука',
+    'география',
+    'спорт',
+    'кино и музыка',
+    'технологии',
+    'литература',
+    'биология',
+    'космос',
+    'видеоигры',
+    'животные',
+    'искусство',
 ]
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -291,7 +301,7 @@ class GameSession:
         self.round_answered = False
         self.current_team = 'A'
 
-    def add_or_reconnect_player(self, *, sid: str, player_token: str, user_id=None, name: str | None = None, team: str | None = None):
+    def add_or_reconnect_player(self, *, sid: str, player_token: str, user_id=None, name: str | None = None, team: str | None = None, avatar: str | None = None):
         if not player_token:
             player_token = uuid.uuid4().hex
 
@@ -311,6 +321,8 @@ class GameSession:
             p['connected'] = True
             if name:
                 p['name'] = name
+            if avatar is not None:
+                p['avatar'] = avatar
             self.sid_to_token[sid] = player_token
             return p.get('team'), False
 
@@ -342,6 +354,7 @@ class GameSession:
             'answered_current': False,
             'connected': True,
             'disconnect_timer': None,
+            'avatar': avatar,
         }
         self.sid_to_token[sid] = player_token
         return team, True
@@ -669,7 +682,15 @@ def end_game(pin: str):
         else:
             if stats:
                 winner = stats[0]['name']
-        del active_games[pin]
+
+        # Запускаем таймер для очистки игры через 60 секунд
+        def _cleanup():
+            with games_lock:
+                if pin in active_games and active_games[pin].status == 'finished':
+                    del active_games[pin]
+        timer = threading.Timer(60.0, _cleanup)
+        timer.daemon = True
+        timer.start()
 
     with app.app_context():
         history = GameHistory.query.filter_by(pin=pin).order_by(GameHistory.created_at.desc()).first()
@@ -767,6 +788,10 @@ def handle_disconnect():
                 if len(game.players) == 0:
                     del active_games[pin]
             else:
+                # Для завершённой игры не запускаем таймер удаления (она удалится через 60 секунд из end_game)
+                if game.status == 'finished':
+                    continue
+
                 def _cleanup_disconnect(pin=pin, player_token=token):
                     removed_name = None
                     players_payload = []
@@ -796,8 +821,8 @@ def handle_disconnect():
 def get_players_list(game):
     result = []
     for p in game.players.values():
-        avatar = None
-        if p.get('user_id'):
+        avatar = p.get('avatar')
+        if not avatar and p.get('user_id'):
             user = User.query.get(p['user_id'])
             if user:
                 avatar = user.avatar
@@ -806,7 +831,7 @@ def get_players_list(game):
             'team': p.get('team'),
             'score': p.get('score', 0),
             'connected': bool(p.get('connected', True)),
-            'avatar': avatar,  # добавляем
+            'avatar': avatar,
         })
     return result
 
@@ -882,7 +907,6 @@ def handle_join_game(data):
         game = active_games.get(pin)
         if not game:
             emit('error_message', {'message': 'игра не найдена'})
-            # Добавляем редирект на главную
             socketio.emit('redirect_to_main', {'message': 'Игра не найдена'}, room=request.sid)
             return
         if game.status in ('playing', 'paused'):
@@ -895,11 +919,14 @@ def handle_join_game(data):
 
         if current_user.is_authenticated:
             final_name = current_user.username
+            avatar = current_user.avatar
         else:
             if player_token in game.players:
                 final_name = game.players[player_token]['name']
+                avatar = game.players[player_token].get('avatar')
             else:
                 final_name = _generate_player_name()
+                avatar = None
 
         team, is_new = game.add_or_reconnect_player(
             sid=request.sid,
@@ -907,6 +934,7 @@ def handle_join_game(data):
             user_id=current_user.id if current_user.is_authenticated else None,
             name=final_name,
             team=requested_team,
+            avatar=avatar,
         )
 
         join_room(pin)
@@ -1071,7 +1099,8 @@ def handle_restart_game(data):
                     player_token=token,
                     user_id=p['user_id'],
                     name=p['name'],
-                    team=p.get('team')
+                    team=p.get('team'),
+                    avatar=p.get('avatar'),
                 )
         active_games[new_game.pin] = new_game
 
@@ -1159,10 +1188,12 @@ def handle_submit_answer(data):
     }, room=pin)
 
     if game.mode == 'teams':
+        message = f"{answered_by} {'верно' if is_correct else 'ошибся'}!"
         socketio.emit('round_locked', {
             'team': current_team,
             'answered_by': answered_by,
             'correct': is_correct,
+            'message': message,
         }, room=pin)
         _schedule_next_question(pin)
         return
@@ -1198,6 +1229,32 @@ def handle_admin_end(data):
         if not _is_creator(game, actor_token=actor_token):
             return
     end_game(pin)
+
+@socketio.on('send_chat_message')
+def handle_chat_message(data):
+    pin = data.get('pin', '').upper().strip()
+    text = data.get('text', '').strip()
+    if not pin or not text:
+        return
+    # Ограничение длины до 100 символов
+    if len(text) > 100:
+        text = text[:100]
+    with games_lock:
+        game = active_games.get(pin)
+        if not game:
+            return
+        player = game.get_player_by_sid(request.sid)
+        if not player:
+            return
+        sender = player.get('name', 'Неизвестный')
+        avatar = player.get('avatar')
+        timestamp = datetime.utcnow().strftime('%H:%M')
+        socketio.emit('chat_message', {
+            'sender': sender,
+            'text': text,
+            'time': timestamp,
+            'avatar': avatar,
+        }, room=pin)
 
 # ==================== API РОУТЫ ====================
 

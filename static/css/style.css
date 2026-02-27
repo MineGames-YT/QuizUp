@@ -1221,10 +1221,12 @@ select.js-custom-select.qselect-native {
 }
 
 .timer-value.danger {
-  background: linear-gradient(135deg, var(--danger), #f87171);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shake 0.5s ease infinite;
+  animation: shake 0.5s ease infinite, pulse 1s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 @keyframes shake {
@@ -1857,4 +1859,255 @@ select.js-custom-select.qselect-native {
     transform: none;
     justify-content: center;
   }
+}
+
+/* Анимация для новых сообщений */
+.chat-message {
+  animation: messageAppear 0.3s ease-out;
+}
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.option-btn:not(:disabled):active {
+  transform: scale(0.98);
+  transition: transform 0.1s;
+}
+
+
+/* ===== ЧАТ ===== */
+.chat-container {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    margin-top: 24px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    height: 400px; /* большой чат */
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s;
+}
+
+.chat-container:hover {
+    border-color: var(--primary-light);
+    box-shadow: var(--shadow-lg), 0 0 30px rgba(68, 123, 212, 0.2);
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    color: var(--primary-light);
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.chat-badge {
+    background: rgba(68, 123, 212, 0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 14px;
+    padding-right: 6px;
+    scroll-behavior: smooth;
+}
+
+.chat-message {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: rgba(68, 123, 212, 0.08);
+    border-radius: var(--radius-md);
+    word-wrap: break-word;
+    border-left: 3px solid var(--primary);
+    animation: messageSlide 0.25s ease-out;
+}
+
+@keyframes messageSlide {
+    from {
+        opacity: 0;
+        transform: translateX(15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.chat-message .sender {
+    font-weight: 700;
+    color: var(--primary-light);
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.chat-message .time {
+    font-size: 10px;
+    color: var(--text-light);
+    margin-left: 8px;
+    opacity: 0.8;
+}
+
+.chat-message .text {
+    font-size: 15px;
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* Эмодзи в 6 раз больше */
+.chat-message .text .emoji-large {
+    font-size: 90px;  /* 6 * 15px */
+    line-height: 1;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 2px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    animation: emojiPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes emojiPop {
+    0% { transform: scale(0); }
+    80% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.chat-emoji-panel {
+    display: flex;
+    gap: 6px;
+    background: rgba(5, 45, 110, 0.4);
+    border-radius: 30px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+}
+
+.emoji-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 50%;
+    transition: all 0.2s;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.emoji-btn:hover {
+    background: rgba(68, 123, 212, 0.4);
+    transform: scale(1.2) rotate(5deg);
+}
+
+#chatInput {
+    flex: 1;
+    padding: 12px 16px;
+    background: rgba(5, 45, 110, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    color: var(--text-dark);
+    font-size: 15px;
+    transition: all 0.3s;
+}
+
+#chatInput:focus {
+    outline: none;
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(68, 123, 212, 0.3);
+}
+
+#chatSendBtn {
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 18px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 14px rgba(16, 75, 169, 0.4);
+}
+
+#chatSendBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(68, 123, 212, 0.6);
+}
+
+#chatSendBtn:active {
+    transform: scale(0.95);
+}
+
+/* Анимации для страницы */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.card, .menu-card, .game-info-card, .players-section {
+    animation: fadeInUp 0.5s ease;
+}
+
+.question-box {
+    animation: pulseGlow 2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+    from { box-shadow: 0 0 10px rgba(68, 123, 212, 0.3); }
+    to { box-shadow: 0 0 30px rgba(68, 123, 212, 0.7); }
+}
+
+.option-btn {
+    transition: transform 0.2s, box-shadow 0.3s, background 0.2s;
+}
+
+.option-btn:active {
+    transform: scale(0.97);
+}
+
+/* Улучшенная анимация для floating-orb (уже есть, но добавим разнообразия) */
+.floating-orb {
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+}
+
+.player-avatar-small {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
 }

@@ -64,6 +64,27 @@
 <!-- Статус -->
 <div id="statusBar" style="text-align: center; margin-top: 20px; font-weight: 500; min-height: 24px;"></div>
 
+<!-- ЧАТ В ИГРЕ -->
+<div class="chat-container" style="margin-top: 20px;">
+    <div class="chat-header">
+        <span>Чат</span>
+        <span class="chat-badge" id="chatCount">0</span>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-area">
+        <div class="chat-emoji-panel" id="emojiPanel">
+            <button class="emoji-btn" data-emoji="😊">😊</button>
+            <button class="emoji-btn" data-emoji="👍">👍</button>
+            <button class="emoji-btn" data-emoji="❤️">❤️</button>
+            <button class="emoji-btn" data-emoji="😂">😂</button>
+            <button class="emoji-btn" data-emoji="🎉">🎉</button>
+            <button class="emoji-btn" data-emoji="🤔">🤔</button>
+        </div>
+        <input type="text" id="chatInput" placeholder="Напишите сообщение..." maxlength="100">
+        <button id="chatSendBtn" class="btn btn-primary btn-small">➤</button>
+    </div>
+</div>
+
 <!-- Оверлей ожидания -->
 <div class="waiting-overlay" id="waitingOverlay" style="display: none;">
     <div class="waiting-content">
@@ -130,6 +151,16 @@
     let timerStopped = false;
     let roundActive = true;
     let restartTimerInterval;
+
+    // Функция для отрисовки аватара
+    function renderAvatar(avatar, name, sizeClass = 'player-avatar') {
+        if (avatar) {
+            return `<img src="/static/uploads/${avatar}" class="${sizeClass}" alt="${name}">`;
+        } else {
+            const initial = name ? name.charAt(0).toUpperCase() : '?';
+            return `<span class="${sizeClass} initials">${initial}</span>`;
+        }
+    }
 
     function resetTimerUI(seconds) {
         const timerEl = document.getElementById('timer');
@@ -290,23 +321,26 @@
         }
     });
 
+    // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК round_locked
     socket.on('round_locked', function(data) {
         if (gameMode !== 'teams') return;
 
         roundActive = false;
         clearInterval(timerInterval);
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        setWaiting(false);
+        setWaiting(false); // убираем оверлей ожидания
         if (typeof data.correct === 'boolean') showTimerResult(data.correct);
+
+        // Показываем сообщение о результате для всех игроков
+        if (data.message) {
+            document.getElementById('statusBar').textContent = data.message;
+            document.getElementById('statusBar').style.color = data.correct ? 'var(--success)' : 'var(--danger)';
+        }
 
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
             hasAnswered = true;
             isMyTurn = false;
-            const msg = data.correct ?
-                `${data.answered_by} ответил верно!` :
-                `${data.answered_by} ошибся`;
-            document.getElementById('statusBar').textContent = msg;
-            document.getElementById('statusBar').style.color = data.correct ? 'var(--success)' : 'var(--danger)';
+            // Для своей команды дополнительно ничего не делаем, сообщение уже показано
         }
     });
 
@@ -338,9 +372,7 @@
                 players.forEach(p => {
                     const item = document.createElement('div');
                     item.className = 'ffa-player-item';
-                    const avatar = p.avatar ? 
-                        `<img src="{{ url_for('static', filename='uploads/') }}${p.avatar}" class="player-avatar">` :
-                        `<span class="player-avatar initials">${p.name.charAt(0).toUpperCase()}</span>`;
+                    const avatar = renderAvatar(p.avatar, p.name);
                     item.innerHTML = `
                         <div class="player-info">
                             ${avatar}
@@ -441,6 +473,65 @@
     socket.on('error_message', function(data) {
         showNotification(data.message, 'error');
     });
+
+    // --- ЧАТ В ИГРЕ ---
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const emojiPanel = document.getElementById('emojiPanel');
+    const chatCount = document.getElementById('chatCount');
+
+    function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        socket.emit('send_chat_message', {
+            pin: gamePin,
+            text: text
+        });
+        chatInput.value = '';
+    }
+
+    chatSendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    emojiPanel.addEventListener('click', (e) => {
+        const btn = e.target.closest('.emoji-btn');
+        if (!btn) return;
+        const emoji = btn.getAttribute('data-emoji');
+        chatInput.value += emoji;
+        chatInput.focus();
+    });
+
+    socket.on('chat_message', (data) => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-message';
+
+        // Увеличение эмодзи
+        const textWithEmoji = data.text.replace(
+            /([\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])/gu,
+            '<span class="emoji-large">$1</span>'
+        );
+
+        const avatarHtml = renderAvatar(data.avatar, data.sender, 'player-avatar-small');
+        msgDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                ${avatarHtml}
+                <span class="sender">${data.sender}</span>
+                <span class="time">${data.time}</span>
+            </div>
+            <div class="text">${textWithEmoji}</div>
+        `;
+
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (chatCount) {
+            chatCount.textContent = chatMessages.children.length;
+        }
+    });
+    // --- КОНЕЦ ЧАТА ---
 
     function startTimer(seconds) {
         if (timerStopped || !roundActive) return;

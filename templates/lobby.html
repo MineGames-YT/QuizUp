@@ -95,6 +95,27 @@
         </div>
     </div>
 
+    <!-- ЧАТ -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <span>Чат</span>
+            <span class="chat-badge" id="chatCount">0</span>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-area">
+            <div class="chat-emoji-panel" id="emojiPanel">
+                <button class="emoji-btn" data-emoji="😊">😊</button>
+                <button class="emoji-btn" data-emoji="👍">👍</button>
+                <button class="emoji-btn" data-emoji="❤️">❤️</button>
+                <button class="emoji-btn" data-emoji="😂">😂</button>
+                <button class="emoji-btn" data-emoji="🎉">🎉</button>
+                <button class="emoji-btn" data-emoji="🤔">🤔</button>
+            </div>
+            <input type="text" id="chatInput" placeholder="Напишите сообщение..." maxlength="100">
+            <button id="chatSendBtn" class="btn btn-primary btn-small">➤</button>
+        </div>
+    </div>
+
     <!-- Управление -->
     <div class="lobby-actions">
         <button id="startBtn" class="btn btn-primary btn-large" style="display: none;" onclick="startGame()">
@@ -144,6 +165,16 @@
         }
         return name;
         {% endif %}
+    }
+
+    // Функция для отрисовки аватара
+    function renderAvatar(avatar, name, sizeClass = 'player-avatar') {
+        if (avatar) {
+            return `<img src="/static/uploads/${avatar}" class="${sizeClass}" alt="${name}">`;
+        } else {
+            const initial = name ? name.charAt(0).toUpperCase() : '?';
+            return `<span class="${sizeClass} initials">${initial}</span>`;
+        }
     }
 
     myToken = getOrCreatePlayerToken();
@@ -257,10 +288,64 @@
         setTimeout(() => window.location.href = '/', 2000);
     });
 
-    function getAvatarHtml(name) {
-        const firstLetter = name.charAt(0).toUpperCase();
-        return `<span class="player-avatar initials">${firstLetter}</span>`;
+    // --- ЧАТ ---
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const emojiPanel = document.getElementById('emojiPanel');
+    const chatCount = document.getElementById('chatCount');
+
+    function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        socket.emit('send_chat_message', {
+            pin: gamePin,
+            text: text
+        });
+        chatInput.value = '';
     }
+
+    chatSendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    emojiPanel.addEventListener('click', (e) => {
+        const btn = e.target.closest('.emoji-btn');
+        if (!btn) return;
+        const emoji = btn.getAttribute('data-emoji');
+        chatInput.value += emoji;
+        chatInput.focus();
+    });
+
+    socket.on('chat_message', (data) => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-message';
+
+        // Увеличение эмодзи
+        const textWithEmoji = data.text.replace(
+            /([\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])/gu,
+            '<span class="emoji-large">$1</span>'
+        );
+
+        const avatarHtml = renderAvatar(data.avatar, data.sender, 'player-avatar-small');
+        msgDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                ${avatarHtml}
+                <span class="sender">${data.sender}</span>
+                <span class="time">${data.time}</span>
+            </div>
+            <div class="text">${textWithEmoji}</div>
+        `;
+
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (chatCount) {
+            chatCount.textContent = chatMessages.children.length;
+        }
+    });
+    // --- КОНЕЦ ЧАТА ---
 
     function updatePlayerList(players) {
         document.getElementById('playerCount').textContent = players.length;
@@ -270,7 +355,7 @@
             ffaList.innerHTML = players.map(p => `
                 <li class="player-item">
                     <div class="player-info">
-                        ${getAvatarHtml(p.name)}
+                        ${renderAvatar(p.avatar, p.name)}
                         <span class="player-name">${p.name}</span>
                     </div>
                     ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
@@ -284,7 +369,7 @@
             document.getElementById('teamAList').innerHTML = teamA.map(p => `
                 <li class="player-item">
                     <div class="player-info">
-                        ${getAvatarHtml(p.name)}
+                        ${renderAvatar(p.avatar, p.name)}
                         <span class="player-name">${p.name}</span>
                     </div>
                     ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
@@ -295,7 +380,7 @@
             document.getElementById('teamBList').innerHTML = teamB.map(p => `
                 <li class="player-item">
                     <div class="player-info">
-                        ${getAvatarHtml(p.name)}
+                        ${renderAvatar(p.avatar, p.name)}
                         <span class="player-name">${p.name}</span>
                     </div>
                     ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}

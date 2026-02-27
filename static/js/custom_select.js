@@ -25,9 +25,6 @@
     const r = instance.trigger.getBoundingClientRect();
     const menu = instance.menu;
 
-    // сначала показываем, чтобы можно было посчитать высоту
-    menu.style.left = '0px';
-    menu.style.top = '0px';
     menu.style.width = r.width + 'px';
     menu.hidden = false;
 
