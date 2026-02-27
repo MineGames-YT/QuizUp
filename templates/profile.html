@@ -3,35 +3,58 @@
 {% block title %}Профиль - QuizBattle{% endblock %}
 
 {% block content %}
-<div class="card">
+<div class="card" style="max-width: 800px; margin: 0 auto;">
     <div class="card-header">
-        <h2 class="card-title">Профиль: {{ current_user.username }}</h2>
-        <span class="badge badge-admin">Место в рейтинге: {{ rank }}</span>
+        <h2 class="card-title">Профиль</h2>
     </div>
     
-    <div class="form-row" style="text-align: center; margin-bottom: 20px;">
-        <div class="card" style="background: var(--bg-tertiary);">
+    <div style="text-align: center; margin-bottom: 30px;">
+        {% if current_user.avatar %}
+            <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}" alt="Avatar" class="profile-avatar">
+        {% else %}
+            <div class="avatar-placeholder">{{ current_user.username[0]|upper }}</div>
+        {% endif %}
+        <h3>{{ current_user.username }}</h3>
+    </div>
+    
+    <div class="form-row" style="text-align: center; margin-bottom: 30px;">
+        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
             <div style="font-size: 32px; font-weight: 800; color: var(--accent-primary);">
                 {{ current_user.rating }}
             </div>
             <div style="color: var(--text-muted); font-size: 13px;">Рейтинг</div>
         </div>
-        <div class="card" style="background: var(--bg-tertiary);">
+        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
             <div style="font-size: 32px; font-weight: 800; color: var(--success);">
                 {{ current_user.total_games }}
             </div>
             <div style="color: var(--text-muted); font-size: 13px;">Игр сыграно</div>
         </div>
-        <div class="card" style="background: var(--bg-tertiary);">
+        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
             <div style="font-size: 32px; font-weight: 800; color: var(--warning);">
                 {{ current_user.total_wins }}
             </div>
             <div style="color: var(--text-muted); font-size: 13px;">Побед</div>
         </div>
     </div>
+    
+    <form method="POST" enctype="multipart/form-data" style="margin-top: 20px;">
+        <div class="form-group">
+            <label>Новое имя пользователя</label>
+            <input type="text" name="username" value="{{ current_user.username }}" required minlength="3" maxlength="20">
+        </div>
+        
+        <div class="form-group">
+            <label>Загрузить аватар</label>
+            <input type="file" name="avatar" accept="image/*">
+            <small style="color: var(--text-muted);">Максимум 2MB, форматы: PNG, JPG, JPEG, GIF</small>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-large">Сохранить изменения</button>
+    </form>
 </div>
 
-<div class="card">
+<div class="card" style="margin-top: 30px;">
     <div class="card-header">
         <h3 class="card-title">История игр</h3>
     </div>
@@ -49,7 +72,7 @@
         </thead>
         <tbody>
             {% for s in stats %}
-            <tr>
+            <tr class="fade-in">
                 <td>{{ s.game.topic }}</td>
                 <td>{{ 'Команды' if s.game.mode == 'teams' else 'FFA' }}</td>
                 <td><strong>{{ s.score }}</strong></td>

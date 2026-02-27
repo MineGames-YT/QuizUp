@@ -9,6 +9,8 @@
         <div class="score-team" id="teamADisplay">
             <div class="score-team-name">Команда А</div>
             <div class="score-team-value" id="scoreA" style="color: var(--danger);">0</div>
+            <!-- Список игроков для FFA будет заполняться динамически -->
+            <div id="ffaLeftList" style="display: none;"></div>
         </div>
     </div>
     
@@ -21,6 +23,7 @@
         <div class="score-team" id="teamBDisplay">
             <div class="score-team-name">Команда Б</div>
             <div class="score-team-value" id="scoreB" style="color: var(--success);">0</div>
+            <div id="ffaRightList" style="display: none;"></div>
         </div>
     </div>
 </div>
@@ -70,7 +73,7 @@
     </div>
 </div>
 
-<!-- Модал результатов -->
+<!-- Модал результатов (обновлённый дизайн) -->
 <div class="modal-overlay" id="resultsModal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
@@ -84,23 +87,28 @@
                     <tr>
                         <th>Место</th>
                         <th>Игрок</th>
+                        <th>Команда</th>
                         <th>Очки</th>
                         <th>Правильно</th>
                     </tr>
                 </thead>
                 <tbody id="resultsTable"></tbody>
             </table>
+
+            <!-- Новая секция: играть ещё с таймером -->
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-success pulse" id="playAgainBtn" onclick="playAgain()">Играть ещё</button>
+                <div class="restart-timer" id="restartTimer">Авто-возврат через 15с</div>
+            </div>
         </div>
         <div class="modal-footer">
-            <a href="/" class="btn btn-primary">На главную</a>
-            <button class="btn btn-secondary" onclick="exportResults()">Скачать результаты</button>
+            <a href="/" class="btn btn-primary">Главное меню</a>
         </div>
     </div>
 </div>
 
 <!-- Панель админа (только для создателя) -->
 <div class="admin-panel" id="adminPanel" style="display: none;">
-    <!-- Кнопка паузы УДАЛЕНА -->
     <button class="btn btn-secondary admin-btn" onclick="skipQuestion()">Пропустить</button>
     <button class="btn btn-danger admin-btn" onclick="endGame()">Завершить</button>
 </div>
@@ -121,6 +129,9 @@
     let myToken = '';
     let myName = '';
     let gameMode = 'teams';
+    let timerStopped = false;
+    let roundActive = true;
+    let restartTimerInterval;
 
     function getOrCreatePlayerToken() {
         let token = localStorage.getItem('qb_player_token');
@@ -164,8 +175,12 @@
         }
 
         if (gameMode === 'ffa') {
-            document.getElementById('teamADisplay').style.display = 'none';
-            document.getElementById('teamBDisplay').style.display = 'none';
+            document.querySelector('#teamADisplay .score-team-name').textContent = 'Игроки';
+            document.querySelector('#teamBDisplay .score-team-name').textContent = 'Игроки';
+            document.getElementById('ffaLeftList').style.display = 'block';
+            document.getElementById('ffaRightList').style.display = 'block';
+            document.getElementById('scoreA').style.display = 'none';
+            document.getElementById('scoreB').style.display = 'none';
         }
 
         if (data.leaderboard && data.leaderboard.A !== undefined) {
@@ -177,6 +192,7 @@
     });
 
     socket.on('question', function(data) {
+        console.log('Получен вопрос:', data);
         document.getElementById('questionText').textContent = data.question;
         document.getElementById('currentQ').textContent = data.question_number;
         document.getElementById('totalQ').textContent = data.total;
@@ -185,6 +201,8 @@
             document.getElementById('opt' + i).textContent = opt;
         });
 
+        roundActive = true;
+        timerStopped = false;
         hasAnswered = false;
         document.querySelectorAll('.option-btn').forEach(btn => {
             btn.classList.remove('correct', 'wrong');
@@ -196,9 +214,8 @@
         const progress = (data.question_number / data.total) * 100;
         document.getElementById('progressFill').style.width = progress + '%';
 
-        if (data.leaderboard && data.leaderboard.A !== undefined) {
-            document.getElementById('scoreA').textContent = data.leaderboard.A;
-            document.getElementById('scoreB').textContent = data.leaderboard.B;
+        if (data.leaderboard) {
+            updateLeaderboard(data.leaderboard);
         }
 
         startTimer(data.time_left || 30);
@@ -222,14 +239,14 @@
     socket.on('round_locked', function(data) {
         if (gameMode !== 'teams') return;
 
+        roundActive = false;
+        clearInterval(timerInterval);
+        document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+        document.getElementById('waitingOverlay').style.display = 'flex';
+
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
             hasAnswered = true;
             isMyTurn = false;
-
-            clearInterval(timerInterval);
-            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-            document.getElementById('waitingOverlay').style.display = 'flex';
-
             const msg = data.correct ?
                 `${data.answered_by} ответил верно!` :
                 `${data.answered_by} ошибся`;
@@ -239,9 +256,13 @@
     });
 
     socket.on('score_update', function(data) {
-        if (data.leaderboard && data.leaderboard.A !== undefined) {
-            updateScore('A', data.leaderboard.A);
-            updateScore('B', data.leaderboard.B);
+        updateLeaderboard(data.leaderboard);
+
+        if (data.answered_by !== myName && roundActive) {
+            roundActive = false;
+            clearInterval(timerInterval);
+            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+            document.getElementById('waitingOverlay').style.display = 'flex';
         }
 
         const status = data.is_correct ?
@@ -253,20 +274,48 @@
             'var(--success)' : 'var(--danger)';
     });
 
-    // Функция для анимированного обновления счёта
-    function updateScore(team, value) {
-        const el = document.getElementById('score' + team);
-        if (el.textContent !== value) {
-            el.textContent = value;
-            el.classList.add('pop');
-            setTimeout(() => el.classList.remove('pop'), 200);
+    function updateLeaderboard(leaderboard) {
+        if (gameMode === 'teams' && leaderboard.A !== undefined) {
+            document.getElementById('scoreA').textContent = leaderboard.A;
+            document.getElementById('scoreB').textContent = leaderboard.B;
+        } else if (gameMode === 'ffa' && Array.isArray(leaderboard)) {
+            const half = Math.ceil(leaderboard.length / 2);
+            const leftPlayers = leaderboard.slice(0, half);
+            const rightPlayers = leaderboard.slice(half);
+
+            function renderPlayerList(players, containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerHTML = '';
+                players.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = 'ffa-player-item';
+                    const avatar = p.avatar ? 
+                        `<img src="{{ url_for('static', filename='uploads/') }}${p.avatar}" class="player-avatar">` :
+                        `<span class="player-avatar initials">${p.name.charAt(0).toUpperCase()}</span>`;
+                    item.innerHTML = `
+                        <div class="player-info">
+                            ${avatar}
+                            <span class="ffa-player-name">${p.name}</span>
+                        </div>
+                        <span class="ffa-player-score">${p.score}</span>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+
+            renderPlayerList(leftPlayers, 'ffaLeftList');
+            renderPlayerList(rightPlayers, 'ffaRightList');
         }
     }
 
     socket.on('answer_result', function(data) {
+        console.log('Результат ответа:', data);
         hasAnswered = true;
         isMyTurn = false;
+        roundActive = false;
         clearInterval(timerInterval);
+        timerStopped = true;
 
         const btn = document.querySelector(`[data-index="${data.answer}"]`);
         if (btn) btn.classList.add(data.correct ? 'correct' : 'wrong');
@@ -279,6 +328,7 @@
 
     socket.on('time_up', function() {
         clearInterval(timerInterval);
+        roundActive = false;
 
         document.getElementById('statusBar').textContent = 'время вышло!';
         document.getElementById('statusBar').style.color = 'var(--danger)';
@@ -301,25 +351,37 @@
         const winnerText = document.getElementById('winnerText');
         if (data.mode === 'teams') {
             if (data.winner === 'draw') {
-                winnerText.textContent = 'ничья!';
+                winnerText.textContent = 'Ничья!';
                 winnerText.style.color = 'var(--warning)';
             } else {
-                winnerText.textContent = `победила команда ${data.winner === 'A' ? 'а' : 'б'}!`;
+                winnerText.textContent = `Победила команда ${data.winner === 'A' ? 'А' : 'Б'}!`;
                 winnerText.style.color = data.winner === 'A' ? 'var(--danger)' : 'var(--success)';
             }
         } else {
-            winnerText.textContent = `победитель: ${data.winner}`;
+            winnerText.textContent = `Победитель: ${data.winner}`;
         }
 
         const tbody = document.getElementById('resultsTable');
         tbody.innerHTML = (data.stats || []).map((s, i) => `
-            <tr>
-                <td>${i + 1}</td>
+            <tr class="fade-in">
+                <td><strong>${i + 1}</strong></td>
                 <td>${s.name}</td>
-                <td><strong>${s.score}</strong></td>
+                <td>${s.team ? 'Команда ' + s.team : '—'}</td>
+                <td><strong style="color: var(--accent-primary);">${s.score}</strong></td>
                 <td>${s.correct}/${s.correct + s.wrong}</td>
             </tr>
         `).join('');
+
+        startRestartTimer();
+    });
+
+    socket.on('game_restarted', function(data) {
+        window.location.href = '/lobby?pin=' + data.new_pin;
+    });
+
+    socket.on('redirect_to_main', function(data) {
+        if (data && data.message) showNotification(data.message, 'info');
+        setTimeout(() => window.location.href = '/', 2000);
     });
 
     socket.on('error_message', function(data) {
@@ -327,15 +389,21 @@
     });
 
     function startTimer(seconds) {
+        if (timerStopped || !roundActive) return;
+
         clearInterval(timerInterval);
 
         let timeLeft = seconds;
         const timerEl = document.getElementById('timer');
 
         timerEl.textContent = timeLeft;
-        timerEl.classList.remove('warning', 'danger');
+        timerEl.classList.remove('warning', 'danger', 'stopped');
 
         timerInterval = setInterval(() => {
+            if (timerStopped || !roundActive) {
+                clearInterval(timerInterval);
+                return;
+            }
             timeLeft--;
             timerEl.textContent = timeLeft;
 
@@ -353,10 +421,16 @@
     }
 
     function submitAnswer(index) {
-        if (hasAnswered || !isMyTurn) return;
+        if (hasAnswered || !isMyTurn || !roundActive) {
+            console.log('Нельзя ответить: hasAnswered=' + hasAnswered + ', isMyTurn=' + isMyTurn + ', roundActive=' + roundActive);
+            return;
+        }
 
+        console.log('Отправка ответа:', index);
         hasAnswered = true;
+        roundActive = false;
         clearInterval(timerInterval);
+        timerStopped = true;
 
         document.querySelectorAll('.option-btn').forEach(btn => {
             btn.disabled = true;
@@ -372,13 +446,12 @@
         window.location.href = `/api/game/${gamePin}/export`;
     }
 
-    // Функции админа (пауза удалена)
     function skipQuestion() {
         socket.emit('admin_skip', { pin: gamePin, player_token: myToken });
     }
 
     function endGame() {
-        if (confirm('завершить игру?')) {
+        if (confirm('Завершить игру?')) {
             socket.emit('admin_end', { pin: gamePin, player_token: myToken });
         }
     }
@@ -386,5 +459,32 @@
     socket.on('game_resumed', function() {
         socket.emit('get_question', { pin: gamePin });
     });
+
+    function startRestartTimer() {
+        let timeLeft = 15;
+        const timerEl = document.getElementById('restartTimer');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+
+        clearInterval(restartTimerInterval);
+        timerEl.textContent = `Авто-возврат через ${timeLeft}с`;
+
+        restartTimerInterval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 0) {
+                clearInterval(restartTimerInterval);
+                window.location.href = '/';
+            } else {
+                timerEl.textContent = `Авто-возврат через ${timeLeft}с`;
+            }
+        }, 1000);
+    }
+
+    function playAgain() {
+        clearInterval(restartTimerInterval);
+        if (typeof window.showLoading === 'function') {
+            window.showLoading('Перезапуск игры', 'Подготавливаем новую игру...');
+        }
+        socket.emit('restart_game', { pin: gamePin, player_token: myToken });
+    }
 </script>
 {% endblock %}

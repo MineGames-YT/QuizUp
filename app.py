@@ -11,6 +11,7 @@ import threading
 import uuid
 import tempfile
 from datetime import datetime
+from werkzeug.utils import secure_filename
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_file
 from flask_socketio import SocketIO, emit, join_room
@@ -30,6 +31,9 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quizbattle.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
@@ -44,7 +48,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    avatar = db.Column(db.String(200), default='default.png')
+    avatar = db.Column(db.String(200), default=None)  # путь к файлу аватара
     total_games = db.Column(db.Integer, default=0)
     total_wins = db.Column(db.Integer, default=0)
     total_points = db.Column(db.Integer, default=0)
@@ -117,6 +121,9 @@ DISCONNECT_GRACE_SECONDS = int(os.environ.get('DISCONNECT_GRACE_SECONDS', '12'))
 NEXT_QUESTION_DELAY = float(os.environ.get('NEXT_QUESTION_DELAY', '2.0'))
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -266,6 +273,7 @@ class GameSession:
         self.questions_count = int(questions_count) * 2 if self.mode == 'teams' else int(questions_count)
         self.time_limit = int(time_limit)
         self.bonus_enabled = bool(bonus_enabled)
+        self.team_names = {'A': 'Команда А', 'B': 'Команда Б'}
 
         self.status = 'waiting'
         self.created_at = time.time()
@@ -283,18 +291,10 @@ class GameSession:
         self.round_answered = False
         self.current_team = 'A'
 
-    def _pick_team_for_new_player(self) -> str:
-        a = len(self.teams['A'])
-        b = len(self.teams['B'])
-        if a < b:
-            return 'A'
-        if b < a:
-            return 'B'
-        return random.choice(['A', 'B'])
-
-    def add_or_reconnect_player(self, *, sid: str, player_token: str, user_id=None, name: str | None = None):
+    def add_or_reconnect_player(self, *, sid: str, player_token: str, user_id=None, name: str | None = None, team: str | None = None):
         if not player_token:
             player_token = uuid.uuid4().hex
+
         if player_token in self.players:
             p = self.players[player_token]
             t = p.get('disconnect_timer')
@@ -314,10 +314,20 @@ class GameSession:
             self.sid_to_token[sid] = player_token
             return p.get('team'), False
 
-        team = None
-        if self.mode == 'teams':
-            team = self._pick_team_for_new_player()
+        if self.mode == 'teams' and team is None:
+            a = len(self.teams['A'])
+            b = len(self.teams['B'])
+            if a <= b:
+                team = 'A'
+            else:
+                team = 'B'
+
+        if team and self.mode == 'teams':
+            if team not in ('A', 'B'):
+                team = random.choice(['A', 'B'])
             self.teams[team].append(player_token)
+        else:
+            team = None
 
         self.players[player_token] = {
             'token': player_token,
@@ -335,6 +345,24 @@ class GameSession:
         }
         self.sid_to_token[sid] = player_token
         return team, True
+
+    def change_team(self, player_token: str, new_team: str) -> bool:
+        if self.mode != 'teams' or self.status != 'waiting':
+            return False
+        if new_team not in ('A', 'B'):
+            return False
+        if player_token not in self.players:
+            return False
+        p = self.players[player_token]
+        old_team = p.get('team')
+        if old_team == new_team:
+            return True
+        if old_team and old_team in self.teams:
+            if player_token in self.teams[old_team]:
+                self.teams[old_team].remove(player_token)
+        self.teams[new_team].append(player_token)
+        p['team'] = new_team
+        return True
 
     def mark_disconnected(self, sid: str):
         token = self.sid_to_token.get(sid)
@@ -540,9 +568,30 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
-@app.route('/profile')
+@app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
+    if request.method == 'POST':
+        # Смена имени
+        new_username = request.form.get('username', '').strip()
+        if new_username and new_username != current_user.username:
+            if User.query.filter_by(username=new_username).first():
+                flash('Такое имя уже занято', 'error')
+            else:
+                current_user.username = new_username
+                db.session.commit()
+                flash('Имя успешно изменено', 'success')
+        # Загрузка аватара
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            if file and file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(f"user_{current_user.id}_{int(time.time())}.{file.filename.rsplit('.', 1)[1]}")
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                current_user.avatar = filename
+                db.session.commit()
+                flash('Аватар обновлён', 'success')
+        return redirect(url_for('profile'))
+
     stats = PlayerStats.query.filter_by(user_id=current_user.id).all()
     rank = User.query.filter(User.rating > current_user.rating).count() + 1
     return render_template('profile.html', stats=stats, rank=rank)
@@ -555,9 +604,8 @@ def rating():
 @app.route('/join', methods=['POST'])
 def join():
     pin = request.form.get('pin', '').upper().strip()
-    guest_name = request.form.get('guest_name', '').strip()
-    if not pin or not guest_name:
-        flash('заполните все поля')
+    if not pin:
+        flash('введите PIN')
         return redirect(url_for('index'))
     with games_lock:
         if pin not in active_games:
@@ -568,7 +616,6 @@ def join():
             flash('игра уже началась')
             return redirect(url_for('index'))
     session['game_pin'] = pin
-    session['guest_name'] = guest_name
     return redirect(url_for('lobby', pin=pin))
 
 @app.route('/lobby')
@@ -706,39 +753,60 @@ def handle_disconnect():
             token = game.get_player_token_by_sid(request.sid)
             if not token:
                 continue
+            p = game.players.get(token)
+            if not p:
+                continue
+
             game.mark_disconnected(request.sid)
-            def _cleanup_disconnect(pin=pin, player_token=token):
-                removed_name = None
-                players_payload = []
-                with games_lock:
-                    g = active_games.get(pin)
-                    if not g:
-                        return
-                    p2 = g.players.get(player_token)
-                    if not p2 or p2.get('connected'):
-                        return
-                    removed_name = g.remove_player(player_token)
-                    players_payload = get_players_list(g)
-                    if len(g.players) == 0:
-                        del active_games[pin]
+
+            if game.status == 'waiting':
+                removed_name = game.remove_player(token)
                 if removed_name:
+                    players_payload = get_players_list(game)
                     socketio.emit('player_left', {'name': removed_name, 'players': players_payload}, room=pin)
-            timer = threading.Timer(DISCONNECT_GRACE_SECONDS, _cleanup_disconnect)
-            timer.daemon = True
-            p2 = game.players.get(token)
-            if p2:
-                p2['disconnect_timer'] = timer
-            timer.start()
+                if len(game.players) == 0:
+                    del active_games[pin]
+            else:
+                def _cleanup_disconnect(pin=pin, player_token=token):
+                    removed_name = None
+                    players_payload = []
+                    with games_lock:
+                        g = active_games.get(pin)
+                        if not g:
+                            return
+                        p2 = g.players.get(player_token)
+                        if not p2 or p2.get('connected'):
+                            return
+                        removed_name = g.remove_player(player_token)
+                        players_payload = get_players_list(g)
+                        # Если после удаления осталось меньше 2 игроков, завершаем игру
+                        if len(g.players) < 2 and g.status == 'playing':
+                            end_game(pin)
+                        elif len(g.players) == 0:
+                            del active_games[pin]
+                    if removed_name:
+                        socketio.emit('player_left', {'name': removed_name, 'players': players_payload}, room=pin)
+
+                timer = threading.Timer(DISCONNECT_GRACE_SECONDS, _cleanup_disconnect)
+                timer.daemon = True
+                p['disconnect_timer'] = timer
+                timer.start()
             break
 
 def get_players_list(game):
     result = []
     for p in game.players.values():
+        avatar = None
+        if p.get('user_id'):
+            user = User.query.get(p['user_id'])
+            if user:
+                avatar = user.avatar
         result.append({
             'name': p['name'],
             'team': p.get('team'),
             'score': p.get('score', 0),
             'connected': bool(p.get('connected', True)),
+            'avatar': avatar,  # добавляем
         })
     return result
 
@@ -787,9 +855,9 @@ def handle_create_game(data):
         'time_limit': game.time_limit,
     })
 
-def _normalize_player_name(raw_name: str, player_token: str):
-    name = (raw_name or '').strip()
-    return name[:20] if name else f"игрок-{player_token[:4]}"
+def _generate_player_name():
+    num = random.randint(1, 9999)
+    return f"Player{num}"
 
 def _is_creator(game: GameSession, *, actor_token: str | None):
     if current_user.is_authenticated and game.creator_id and current_user.id == game.creator_id:
@@ -802,7 +870,7 @@ def _is_creator(game: GameSession, *, actor_token: str | None):
 def handle_join_game(data):
     pin = (data.get('pin') or '').upper().strip()
     player_token = (data.get('player_token') or '').strip()
-    guest_name = data.get('guest_name', '')
+    requested_team = data.get('team')
 
     if not pin:
         emit('error_message', {'message': 'неверный pin'})
@@ -814,6 +882,8 @@ def handle_join_game(data):
         game = active_games.get(pin)
         if not game:
             emit('error_message', {'message': 'игра не найдена'})
+            # Добавляем редирект на главную
+            socketio.emit('redirect_to_main', {'message': 'Игра не найдена'}, room=request.sid)
             return
         if game.status in ('playing', 'paused'):
             if player_token not in game.players:
@@ -826,13 +896,17 @@ def handle_join_game(data):
         if current_user.is_authenticated:
             final_name = current_user.username
         else:
-            final_name = _normalize_player_name(guest_name, player_token)
+            if player_token in game.players:
+                final_name = game.players[player_token]['name']
+            else:
+                final_name = _generate_player_name()
 
         team, is_new = game.add_or_reconnect_player(
             sid=request.sid,
             player_token=player_token,
             user_id=current_user.id if current_user.is_authenticated else None,
             name=final_name,
+            team=requested_team,
         )
 
         join_room(pin)
@@ -851,33 +925,79 @@ def handle_join_game(data):
             'leaderboard': game.get_leaderboard(),
             'is_creator': is_creator,
             'players': get_players_list(game),
-            'bonus_enabled': game.bonus_enabled,   # ← добавлено
+            'bonus_enabled': game.bonus_enabled,
+            'team_names': game.team_names,
         }
 
     emit('joined', joined_payload, to=request.sid)
     socketio.emit('player_joined', {'name': final_name, 'players': joined_payload['players']}, room=pin)
 
+@socketio.on('switch_team')
+def handle_switch_team(data):
+    pin = data.get('pin', '').upper().strip()
+    new_team = data.get('team', '').upper().strip()
+    player_token = data.get('player_token', '').strip()
+    with games_lock:
+        game = active_games.get(pin)
+        if not game or game.status != 'waiting':
+            emit('error_message', {'message': 'Нельзя сменить команду сейчас'})
+            return
+        if game.change_team(player_token, new_team):
+            players_list = get_players_list(game)
+            socketio.emit('player_updated', {'players': players_list}, room=pin)
+        else:
+            emit('error_message', {'message': 'Не удалось сменить команду'})
+
+@socketio.on('rename_team')
+def handle_rename_team(data):
+    pin = data.get('pin', '').upper().strip()
+    team = data.get('team', '').upper().strip()
+    new_name = data.get('new_name', '').strip()
+    actor_token = data.get('player_token', '').strip()
+    with games_lock:
+        game = active_games.get(pin)
+        if not game:
+            return
+        if not _is_creator(game, actor_token=actor_token):
+            emit('error_message', {'message': 'Только ведущий может переименовывать команды'})
+            return
+        if team not in ('A', 'B'):
+            return
+        game.team_names[team] = new_name[:20]
+        socketio.emit('team_renamed', {'team': team, 'new_name': new_name}, room=pin)
+
 @socketio.on('start_game')
 def handle_start_game(data):
-    pin = (data.get('pin') or '').upper().strip()
-    actor_token = (data.get('player_token') or '').strip()
+    pin = data.get('pin', '').upper().strip()
+    actor_token = data.get('player_token', '').strip()
 
     with games_lock:
         game = active_games.get(pin)
         if not game or game.status != 'waiting':
+            emit('error_message', {'message': 'Игра не может быть начата'})
             return
         if not _is_creator(game, actor_token=actor_token):
-            emit('error_message', {'message': 'только ведущий может начать игру'})
+            emit('error_message', {'message': 'Только ведущий может начать игру'})
             return
-        if len(game.players) < 2:
-            emit('error_message', {'message': 'нужно минимум 2 игрока'})
-            return
+        if game.mode == 'teams':
+            if len(game.teams['A']) < 1 or len(game.teams['B']) < 1:
+                emit('error_message', {'message': 'В каждой команде должен быть хотя бы один игрок'})
+                return
+        else:
+            if len(game.players) < 2:
+                emit('error_message', {'message': 'Нужно минимум 2 игрока'})
+                return
 
-        game.load_questions()
-        if not game.questions or len(game.questions) < game.questions_count:
-            emit('error_message', {'message': 'не удалось загрузить вопросы'})
-            return
+    socketio.emit('game_loading', {'step': 'Создание вопросов', 'message': 'Генерация вопросов...'}, room=pin)
 
+    game.load_questions()
+    if not game.questions or len(game.questions) < game.questions_count:
+        socketio.emit('error_message', {'message': 'Не удалось загрузить вопросы'}, room=pin)
+        return
+
+    socketio.emit('game_loading', {'step': 'Подготовка игры', 'message': 'Почти готово...'}, room=pin)
+
+    with games_lock:
         game.status = 'playing'
         game.current_question_idx = 0
         game.current_team = 'A'
@@ -895,6 +1015,7 @@ def handle_start_game(data):
         db.session.add(history)
         db.session.commit()
 
+    socketio.emit('game_ready', room=pin)
     socketio.emit('game_started', {
         'pin': pin,
         'topic': game.topic,
@@ -904,6 +1025,57 @@ def handle_start_game(data):
         'questions_per_team': game.questions_per_team,
         'time_limit': game.time_limit,
     }, room=pin)
+
+@socketio.on('restart_game')
+def handle_restart_game(data):
+    pin = data.get('pin', '').upper().strip()
+    actor_token = data.get('player_token', '').strip()
+
+    with games_lock:
+        old_game = active_games.get(pin)
+        if not old_game or old_game.status != 'finished':
+            emit('error_message', {'message': 'Игра не может быть перезапущена'})
+            return
+
+        # Проверяем, есть ли ещё хост в игре
+        host_present = False
+        for p in old_game.players.values():
+            if p.get('connected') and (
+                (old_game.creator_id and p.get('user_id') == old_game.creator_id) or
+                (old_game.creator_token and p.get('token') == old_game.creator_token)
+            ):
+                host_present = True
+                break
+
+        if not host_present:
+            socketio.emit('redirect_to_main', {'message': 'Хост покинул игру'}, room=pin)
+            return
+
+        # Создаём новую игру с теми же параметрами
+        questions_count = old_game.questions_per_team if old_game.mode == 'teams' else old_game.questions_count
+        new_game = GameSession(
+            creator_id=old_game.creator_id,
+            creator_token=old_game.creator_token,
+            topic=old_game.topic,
+            mode=old_game.mode,
+            difficulty=old_game.difficulty,
+            questions_count=questions_count,
+            time_limit=old_game.time_limit,
+            bonus_enabled=old_game.bonus_enabled,
+        )
+        # Переносим игроков (только подключённых)
+        for token, p in old_game.players.items():
+            if p.get('connected'):
+                new_game.add_or_reconnect_player(
+                    sid=None,
+                    player_token=token,
+                    user_id=p['user_id'],
+                    name=p['name'],
+                    team=p.get('team')
+                )
+        active_games[new_game.pin] = new_game
+
+    socketio.emit('game_restarted', {'new_pin': new_game.pin}, room=pin)
 
 @socketio.on('get_question')
 def handle_get_question(data):
@@ -1050,12 +1222,9 @@ def get_game_stats(pin):
 
 @app.route('/api/game/<pin>/export')
 def export_game_results(pin):
-    """Экспорт результатов игры в текстовый файл"""
     filename = f'game_{pin}_{int(time.time())}.txt'
-    # Кроссплатформенный путь к временной папке
     filepath = os.path.join(tempfile.gettempdir(), filename)
     data_lines = []
-
 
     with games_lock:
         if pin in active_games:
@@ -1108,6 +1277,8 @@ def export_game_results(pin):
 def init_db():
     with app.app_context():
         db.create_all()
+        # Создаём папку для загрузок, если её нет
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         print("база данных создана")
 
 if __name__ == '__main__':

@@ -3,47 +3,30 @@
 {% block title %}QuizBattle - Командная Викторина{% endblock %}
 
 {% block content %}
-<div class="card" style="text-align: center; padding: 40px;">
-    <h1 style="font-size: 36px; margin-bottom: 10px;">QuizBattle</h1>
-    <p style="color: var(--text-secondary); margin-bottom: 30px;">
-        Командная викторина в реальном времени
-    </p>
-</div>
-
-<div class="form-row">
+<div class="main-menu">
     <!-- присоединиться к игре -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Присоединиться</h2>
-        </div>
+    <div class="menu-card">
+        <h2>Присоединиться</h2>
+        <p>Введите PIN-код, чтобы войти в игру</p>
         <form id="joinForm" action="/join" method="POST">
             <div class="form-group">
-                <label>PIN-код</label>
-                <input type="text" name="pin" id="joinPin" placeholder="ABC123" 
-                       maxlength="6" required style="text-transform: uppercase;">
+                <input type="text" name="pin" id="joinPin" placeholder="PIN-код" 
+                       maxlength="6" required style="text-transform: uppercase; text-align: center;">
             </div>
-            <div class="form-group">
-                <label>Ваше имя</label>
-                <input type="text" name="guest_name" id="joinName" 
-                       placeholder="Игрок" maxlength="20" required
-                       value="{{ current_user.username if current_user.is_authenticated else '' }}">
-            </div>
-            <button type="submit" class="btn btn-primary btn-full">
-                Войти в игру
+            <button type="submit" class="btn btn-primary btn-large btn-full">
+                Войти
             </button>
         </form>
     </div>
     
     <!-- создать игру -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Создать игру</h2>
-        </div>
+    <div class="menu-card">
+        <h2>Создать игру</h2>
+        <p>Настройте свою викторину</p>
         <form id="createForm">
             <div class="form-group">
-                <label>Тема</label>
                 <select name="topic" id="gameTopic" required>
-                    <option value="">Выберите тему</option>
+                    <option value="" disabled selected>Тема</option>
                     {% for topic in topics %}
                     <option value="{{ topic }}">{{ topic.title() }}</option>
                     {% endfor %}
@@ -52,20 +35,17 @@
             </div>
 
             <div class="form-group" id="customTopicField" style="display: none;">
-                <label>Своя тема</label>
-                <input type="text" id="customTopic" placeholder="например: аниме 2000-х, k-pop, кино 90-х" maxlength="50">
+                <input type="text" id="customTopic" placeholder="например: аниме 2000-х">
             </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label>Режим</label>
                     <select name="mode" id="gameMode">
                         <option value="teams">Команды</option>
-                        <option value="ffa">Каждый сам за себя</option>
+                        <option value="ffa">Все против всех</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Сложность</label>
                     <select name="difficulty" id="gameDifficulty">
                         <option value="easy">Легко</option>
                         <option value="medium" selected>Средне</option>
@@ -76,7 +56,6 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <label>Вопросов <span style="color: var(--text-secondary); font-weight: 400;">(на команду)</span></label>
                     <select name="questions_count" id="gameQuestions">
                         <option value="5" selected>5</option>
                         <option value="6">6</option>
@@ -87,18 +66,18 @@
 
             <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
                 <input type="checkbox" id="bonusEnabled" style="width: auto;">
-                <label for="bonusEnabled" style="margin: 0;">Бонус за скорость</label>
+                <label for="bonusEnabled">Бонус за скорость</label>
             </div>
             
-            <button type="submit" class="btn btn-primary btn-full">
-                Создать игру
+            <button type="submit" class="btn btn-primary btn-large btn-full">
+                Создать
             </button>
         </form>
     </div>
 </div>
 
-<!-- Как играть -->
-<div class="card" style="background: var(--bg-tertiary);">
+<!-- Как играть (оставлен для информации) -->
+<div class="card" style="margin-top: 30px;">
     <h3 style="margin-bottom: 15px;">Как играть</h3>
     <ol style="padding-left: 20px; color: var(--text-secondary);">
         <li>Создайте игру или присоединитесь по PIN-коду</li>
@@ -122,24 +101,22 @@
         return token;
     }
 
-    const playerToken = getOrCreatePlayerToken();
-
-    const joinNameInput = document.getElementById('joinName');
-
-    {% if not current_user.is_authenticated %}
-    const storedName = localStorage.getItem('qb_guest_name');
-    if (storedName && !joinNameInput.value) {
-        joinNameInput.value = storedName;
+    function getPlayerName() {
+        {% if current_user.is_authenticated %}
+        return '{{ current_user.username }}';
+        {% else %}
+        let name = localStorage.getItem('qb_player_name');
+        if (!name) {
+            const randomNum = Math.floor(Math.random() * 9000 + 1000);
+            name = 'Player' + randomNum;
+            localStorage.setItem('qb_player_name', name);
+        }
+        return name;
+        {% endif %}
     }
-    {% endif %}
 
-    joinNameInput.addEventListener('input', function() {
-        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
-    });
-
-    document.getElementById('joinForm').addEventListener('submit', function() {
-        localStorage.setItem('qb_guest_name', joinNameInput.value.trim());
-    });
+    const playerToken = getOrCreatePlayerToken();
+    const playerName = getPlayerName();
 
     const topicSelect = document.getElementById('gameTopic');
     const customTopicField = document.getElementById('customTopicField');
@@ -161,7 +138,7 @@
 
         topic = (topic || '').trim();
         if (!topic) {
-            showNotification('Укажи тему для игры', 'error');
+            showNotification('Укажите тему для игры', 'error');
             return;
         }
 
@@ -172,6 +149,7 @@
             questions_count: document.getElementById('gameQuestions').value,
             bonus_enabled: document.getElementById('bonusEnabled').checked,
             player_token: playerToken,
+            player_name: playerName
         };
 
         socket.emit('create_game', data);
