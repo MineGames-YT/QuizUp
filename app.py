@@ -21,8 +21,8 @@ from flask_bcrypt import Bcrypt
 from sqlalchemy import func
 from dotenv import load_dotenv
 
-# Gemini интеграция
-from gemini_client import GeminiClient, GeminiAPIError, extract_text as gemini_extract_text
+# groq интеграция
+from groq_client import GroqClient, GroqAPIError, extract_text as groq_extract_text
 from fallback_questions import FALLBACK_QUESTIONS
 
 load_dotenv()
@@ -111,20 +111,12 @@ TOPICS = [
     'история',
     'наука',
     'география',
-    'спорт',
-    'кино и музыка',
-    'технологии',
-    'литература',
-    'биология',
-    'космос',
-    'видеоигры',
-    'животные',
-    'искусство',
+    'спорт'
 ]
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro").strip()
-GEMINI_API_BASE_URL = os.environ.get("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com").strip()
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "groq-2.5-pro").strip()
+GROQ_API_BASE_URL = os.environ.get("GROQ_API_BASE_URL", "https://generativelanguage.googleapis.com").strip()
 
 QUESTION_TIME_LIMIT = int(os.environ.get('QUESTION_TIME_LIMIT', '30'))
 DISCONNECT_GRACE_SECONDS = int(os.environ.get('DISCONNECT_GRACE_SECONDS', '12'))
@@ -188,8 +180,8 @@ def _safe_parse_questions_json(content: str):
         })
     return valid
 
-def generate_questions_via_gemini(topic, difficulty, count=20):
-    if not GEMINI_API_KEY:
+def generate_questions_via_groq(topic, difficulty, count=20):
+    if not GROQ_API_KEY:
         return None
     prompt = f"""создай {count} вопросов для викторины на тему \"{topic}\" с уровнем сложности \"{difficulty}\" (на русском языке).
 
@@ -212,24 +204,22 @@ def generate_questions_via_gemini(topic, difficulty, count=20):
 
 где correct - индекс (0-3) правильного ответа."""
     try:
-        client = GeminiClient(
-            api_key=GEMINI_API_KEY,
-            model=GEMINI_MODEL,
-            api_base_url=GEMINI_API_BASE_URL,
+        client = GroqClient(
+            api_key=GROQ_API_KEY,
+            model=GROQ_MODEL,
+            api_base_url=GROQ_API_BASE_URL,
             timeout=90,
         )
-        result = client.generate_content(
+        result = client.chat_completions(
             prompt=prompt,
-            use_search=False,
             temperature=0.7,
-            max_tokens=3500,
-            response_mime_type="application/json",
+            max_tokens=2200,
         )
-        content = gemini_extract_text(result)
+        content = groq_extract_text(result)
         parsed = _safe_parse_questions_json(content)
         return parsed if parsed else None
     except Exception as e:
-        print(f"ошибка генерации через gemini: {e}")
+        print(f"ошибка генерации через groq: {e}")
         return None
 
 def save_questions_to_db(topic, questions, difficulty='medium'):
@@ -422,10 +412,10 @@ class GameSession:
     def load_questions(self):
         need = self.questions_count
         questions = get_random_questions(self.topic, need, self.difficulty)
-        if len(questions) < need and GEMINI_API_KEY:
+        if len(questions) < need and GROQ_API_KEY:
             missing = need - len(questions)
             req_count = max(12, missing + 8)
-            new_questions = generate_questions_via_gemini(self.topic, self.difficulty, req_count)
+            new_questions = generate_questions_via_groq(self.topic, self.difficulty, req_count)
             if new_questions:
                 save_questions_to_db(self.topic, new_questions, self.difficulty)
                 questions = get_random_questions(self.topic, need, self.difficulty)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""скрипт для генерации вопросов через gemini api
+"""скрипт для генерации вопросов через groq api
 запуск: python generate_questions.py
 
 сценарий:
@@ -7,7 +7,7 @@
 - сохраняет в sqlite (через модели из app.py)
 
 нужно:
-- добавить GEMINI_API_KEY в .env
+- добавить GROQ_API_KEY в .env
 """
 
 from __future__ import annotations
@@ -18,14 +18,14 @@ import time
 
 from dotenv import load_dotenv
 
-from gemini_client import GeminiClient, extract_text
+from groq_client import GroqClient, extract_text
 
 load_dotenv()
 
 # конфиг
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro").strip()
-GEMINI_API_BASE_URL = os.environ.get("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com").strip()
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+GROQ_API_BASE_URL = os.environ.get("GROQ_API_BASE_URL", "https://generativelanguage.googleapis.com").strip()
 
 # темы
 TOPICS = [
@@ -97,10 +97,10 @@ def _safe_parse_questions_json(content: str):
 
 
 def generate_questions(topic: str, difficulty: str, count: int = 35):
-    """генерация вопросов через gemini"""
+    """генерация вопросов через groq"""
 
-    if not GEMINI_API_KEY:
-        print("[!] ошибка: нет GEMINI_API_KEY")
+    if not GROQ_API_KEY:
+        print("[!] ошибка: нет GROQ_API_KEY")
         return None
 
     prompt = f"""создай {count} вопросов для викторины на тему "{topic}" с уровнем сложности "{difficulty}" (на русском языке).
@@ -125,20 +125,18 @@ def generate_questions(topic: str, difficulty: str, count: int = 35):
 где correct - индекс (0-3) правильного ответа."""
 
     try:
-        client = GeminiClient(
-            api_key=GEMINI_API_KEY,
-            model=GEMINI_MODEL,
-            api_base_url=GEMINI_API_BASE_URL,
+        client = GroqClient(
+            api_key=GROQ_API_KEY,
+            model=GROQ_MODEL,
+            api_base_url=GROQ_API_BASE_URL,
             timeout=120,
         )
 
         print(f"[*] отправка запроса для темы '{topic}' ({difficulty})...")
-        resp = client.generate_content(
+        resp = client.chat_completions(
             prompt=prompt,
-            use_search=False,
             temperature=0.7,
             max_tokens=3500,
-            response_mime_type="application/json",
         )
 
         content = extract_text(resp)
@@ -189,8 +187,8 @@ def main():
     print("генератор вопросов для quizup")
     print("=" * 50)
 
-    if not GEMINI_API_KEY:
-        print("[!] укажите GEMINI_API_KEY в .env файле")
+    if not GROQ_API_KEY:
+        print("[!] укажите GROQ_API_KEY в .env файле")
         return
 
     total_generated = 0
