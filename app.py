@@ -260,6 +260,7 @@ def get_random_questions(topic, count=10, difficulty=None):
 
 # ==================== КЛАСС ИГРЫ ====================
 
+# В классе GameSession добавьте новое поле в __init__
 class GameSession:
     def __init__(
         self,
@@ -272,6 +273,7 @@ class GameSession:
         questions_count: int = 5,
         time_limit: int = QUESTION_TIME_LIMIT,
         bonus_enabled: bool = True,
+        is_public: bool = False,  # НОВОЕ ПОЛЕ
     ):
         self.pin = generate_pin()
         self.creator_id = creator_id
@@ -283,6 +285,7 @@ class GameSession:
         self.questions_count = int(questions_count) * 2 if self.mode == 'teams' else int(questions_count)
         self.time_limit = int(time_limit)
         self.bonus_enabled = bool(bonus_enabled)
+        self.is_public = bool(is_public)  # НОВОЕ ПОЛЕ
         self.team_names = {'A': 'Команда А', 'B': 'Команда Б'}
 
         self.status = 'waiting'
@@ -842,6 +845,7 @@ def handle_create_game(data):
     difficulty = (data.get('difficulty') or 'medium').strip()
     questions_count = int(data.get('questions_count', 5))
     bonus_enabled = bool(data.get('bonus_enabled', True))
+    is_public = bool(data.get('is_public', False))  # НОВОЕ ПОЛЕ
     creator_token = (data.get('player_token') or '').strip() or uuid.uuid4().hex
 
     if not topic:
@@ -864,6 +868,7 @@ def handle_create_game(data):
         questions_count=questions_count,
         time_limit=QUESTION_TIME_LIMIT,
         bonus_enabled=bonus_enabled,
+        is_public=is_public,  # НОВОЕ ПОЛЕ
     )
 
     with games_lock:
@@ -878,6 +883,7 @@ def handle_create_game(data):
         'questions_count': game.questions_count,
         'questions_per_team': game.questions_per_team,
         'time_limit': game.time_limit,
+        'is_public': game.is_public,  # НОВОЕ ПОЛЕ
     })
 
 def _generate_player_name():
@@ -890,6 +896,35 @@ def _is_creator(game: GameSession, *, actor_token: str | None):
     if actor_token and game.creator_token and actor_token == game.creator_token:
         return True
     return False
+    
+@socketio.on('find_public_game')
+def handle_find_public_game(data):
+    """Поиск публичной игры в ожидании"""
+    player_token = (data.get('player_token') or '').strip() or uuid.uuid4().hex
+    
+    with games_lock:
+        # Ищем первую публичную игру в статусе waiting
+        for pin, game in active_games.items():
+            if game.is_public and game.status == 'waiting' and len(game.players) < 10:  # Лимит игроков
+                # Проверяем, не слишком ли много игроков уже
+                if game.mode == 'teams' and (len(game.teams['A']) >= 5 or len(game.teams['B']) >= 5):
+                    continue
+                if game.mode == 'ffa' and len(game.players) >= 8:
+                    continue
+                    
+                emit('game_found', {
+                    'pin': game.pin,
+                    'topic': game.topic,
+                    'mode': game.mode,
+                    'difficulty': game.difficulty,
+                    'players_count': len(game.players),
+                    'max_players': game.mode == 'teams' and 10 or 8,
+                    'message': f'Найдена игра: {game.topic}'
+                })
+                return
+    
+    # Если игр не найдено
+    emit('no_games_found', {'message': 'Публичных игр не найдено. Создайте свою!'})
 
 @socketio.on('join_game')
 def handle_join_game(data):

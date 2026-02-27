@@ -4,9 +4,19 @@
 
 {% block content %}
 <div class="main-menu">
-    <!-- Присоединиться к игре -->
+    <!-- КНОПКА ПОИСКА ИГРЫ (НОВАЯ) -->
+    <div class="menu-card" style="background: linear-gradient(135deg, rgba(68, 123, 212, 0.2), rgba(16, 75, 169, 0.1));">
+        <h2 style="color: var(--primary-light);">🔍 Найти игру</h2>
+        <p>Подключиться к публичной игре</p>
+        <button id="findGameBtn" class="btn btn-primary btn-large btn-full" onclick="findPublicGame()">
+            <span class="btn-icon">🎮</span> Искать игру
+        </button>
+        <div id="searchStatus" style="margin-top: 12px; min-height: 24px;"></div>
+    </div>
+    
+    <!-- Присоединиться к игре (старое) -->
     <div class="menu-card">
-        <h2>Присоединиться</h2>
+        <h2>Присоединиться по PIN</h2>
         <p>Введите PIN-код, чтобы войти в игру</p>
         <form id="joinForm" action="/join" method="POST">
             <div class="form-group">
@@ -19,7 +29,7 @@
         </form>
     </div>
     
-    <!-- Создать игру -->
+    <!-- Создать игру (обновленная) -->
     <div class="menu-card">
         <h2>Создать игру</h2>
         <p>Настройте свою викторину</p>
@@ -64,6 +74,14 @@
                 </div>
             </div>
 
+            <!-- НОВАЯ ГАЛОЧКА для приватности -->
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <input type="checkbox" id="publicGame" name="public_game" style="width: auto; cursor: pointer;">
+                <label for="publicGame" style="margin: 0; cursor: pointer; color: var(--text-light);">
+                    Публичная игра (другие смогут найти её по кнопке "Найти игру")
+                </label>
+            </div>
+
             <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
                 <input type="checkbox" id="bonusEnabled" checked style="width: auto; cursor: pointer;">
                 <label for="bonusEnabled" style="margin: 0; cursor: pointer;">Бонус за скорость</label>
@@ -80,7 +98,8 @@
 <div class="card" style="margin-top: 24px;">
     <h3 style="margin-bottom: 16px; font-size: 18px;">Как играть</h3>
     <ol style="padding-left: 20px; color: var(--text-medium); line-height: 2;">
-        <li>Создайте игру или присоединитесь по PIN-коду</li>
+        <li>Нажмите "Найти игру" для быстрого подключения к публичной игре</li>
+        <li>Или создайте свою игру и пригласите друзей по PIN-коду</li>
         <li>Ожидайте других игроков в лобби</li>
         <li>Отвечайте на вопросы быстрее соперников</li>
         <li>Получайте бонусы за скорость</li>
@@ -118,6 +137,59 @@
     const playerToken = getOrCreatePlayerToken();
     const playerName = getPlayerName();
 
+    // Функция поиска публичной игры (НОВАЯ)
+    function findPublicGame() {
+        const btn = document.getElementById('findGameBtn');
+        const statusDiv = document.getElementById('searchStatus');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-small"></span> Поиск...';
+        statusDiv.innerHTML = '<span style="color: var(--primary-light);">🔍 Ищем игру...</span>';
+        
+        socket.emit('find_public_game', {
+            player_token: playerToken,
+            player_name: playerName
+        });
+        
+        // Таймаут на случай, если сервер не отвечает
+        setTimeout(() => {
+            if (btn.disabled) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="btn-icon">🎮</span> Искать игру';
+                statusDiv.innerHTML = '<span style="color: var(--warning);">⏱️ Поиск занял слишком много времени. Попробуйте ещё раз.</span>';
+            }
+        }, 10000);
+    }
+
+    // Обработчик успешного поиска игры
+    socket.on('game_found', function(data) {
+        const btn = document.getElementById('findGameBtn');
+        const statusDiv = document.getElementById('searchStatus');
+        
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">🎮</span> Искать игру';
+        statusDiv.innerHTML = `<span style="color: var(--success);">✅ ${data.message}</span>`;
+        
+        showNotification(data.message, 'success');
+        
+        // Автоматически присоединяемся к найденной игре
+        setTimeout(() => {
+            window.location.href = '/lobby?pin=' + data.pin;
+        }, 1000);
+    });
+
+    // Обработчик, если игр не найдено
+    socket.on('no_games_found', function(data) {
+        const btn = document.getElementById('findGameBtn');
+        const statusDiv = document.getElementById('searchStatus');
+        
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">🎮</span> Искать игру';
+        statusDiv.innerHTML = `<span style="color: var(--danger);">❌ ${data.message}</span>`;
+        
+        showNotification(data.message, 'error');
+    });
+
     // Подстановка PIN из URL
     (function prefillPinFromUrl() {
         try {
@@ -154,12 +226,16 @@
             return;
         }
 
+        // Получаем значение чекбокса публичности (НОВОЕ)
+        const isPublic = document.getElementById('publicGame').checked;
+
         const data = {
             topic: topic,
             mode: document.getElementById('gameMode').value,
             difficulty: document.getElementById('gameDifficulty').value,
             questions_count: document.getElementById('gameQuestions').value,
             bonus_enabled: document.getElementById('bonusEnabled').checked,
+            is_public: isPublic,  // НОВОЕ ПОЛЕ
             player_token: playerToken,
             player_name: playerName
         };
@@ -175,4 +251,32 @@
         showNotification(data.message, 'error');
     });
 </script>
+
+<style>
+    /* Стиль для маленького спиннера в кнопке */
+    .spinner-small {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+        margin-right: 8px;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Анимация для кнопки поиска */
+    #findGameBtn {
+        transition: all 0.3s;
+    }
+    
+    #findGameBtn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+</style>
 {% endblock %}

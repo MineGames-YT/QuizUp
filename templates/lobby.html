@@ -53,6 +53,11 @@
                 <span class="detail-value" id="bonusStatus">✓</span>
             </div>
         </div>
+        <!-- В lobby.html добавьте в game-info-card после других деталей -->
+        <div class="detail-item">
+            <span class="detail-label">Доступ</span>
+            <span class="detail-value" id="gameVisibility">🔒 Приватная</span>
+        </div>
     </div>
 
     <!-- Команды / FFA -->
@@ -227,6 +232,12 @@
             document.getElementById('teamsContainer').style.display = 'grid';
             document.getElementById('ffaContainer').style.display = 'none';
         }
+        
+        // В обработчике socket.on('joined', function(data) { ... })
+        document.getElementById('gameVisibility').innerHTML = 
+            data.is_public ? '🌍 Публичная' : '🔒 Приватная';
+        document.getElementById('gameVisibility').style.color = 
+            data.is_public ? 'var(--success)' : 'var(--warning)';
 
         updatePlayerList(data.players);
         updateScores(data.leaderboard);
