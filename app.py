@@ -1021,22 +1021,23 @@ def handle_join_game(data):
         join_room(pin)
         is_creator = _is_creator(game, actor_token=player_token)
         joined_payload = {
-            'pin': pin,
-            'name': final_name,
-            'team': team,
-            'mode': game.mode,
-            'topic': game.topic,
-            'difficulty': game.difficulty,
-            'questions_count': game.questions_count,
-            'questions_per_team': game.questions_per_team,
-            'time_limit': game.time_limit,
-            'status': game.status,
-            'leaderboard': game.get_leaderboard(),
-            'is_creator': is_creator,
-            'players': get_players_list(game),
-            'bonus_enabled': game.bonus_enabled,
-            'team_names': game.team_names,
-        }
+        'pin': pin,
+        'name': final_name,
+        'team': team,
+        'mode': game.mode,
+        'topic': game.topic,
+        'difficulty': game.difficulty,
+        'questions_count': game.questions_count,
+        'questions_per_team': game.questions_per_team,
+        'time_limit': game.time_limit,
+        'status': game.status,
+        'leaderboard': game.get_leaderboard(),
+        'is_creator': is_creator,
+        'players': get_players_list(game),
+        'bonus_enabled': game.bonus_enabled,
+        'team_names': game.team_names,
+        'is_public': game.is_public,  # ВАЖНО: добавить эту строку
+    }
 
     emit('joined', joined_payload, to=request.sid)
     socketio.emit('player_joined', {'name': final_name, 'players': joined_payload['players']}, room=pin)
@@ -1063,16 +1064,25 @@ def handle_rename_team(data):
     team = data.get('team', '').upper().strip()
     new_name = data.get('new_name', '').strip()
     actor_token = data.get('player_token', '').strip()
+    
     with games_lock:
         game = active_games.get(pin)
         if not game:
+            emit('error_message', {'message': 'Игра не найдена'})
             return
+        
         if not _is_creator(game, actor_token=actor_token):
             emit('error_message', {'message': 'Только ведущий может переименовывать команды'})
             return
+        
         if team not in ('A', 'B'):
             return
-        game.team_names[team] = new_name[:20]
+        
+        if not new_name or len(new_name) > 20:
+            emit('error_message', {'message': 'Название должно быть от 1 до 20 символов'})
+            return
+        
+        game.team_names[team] = new_name
         socketio.emit('team_renamed', {'team': team, 'new_name': new_name}, room=pin)
 
 @socketio.on('start_game')

@@ -73,14 +73,15 @@
 
         <!-- Для командного режима -->
         <div id="teamsContainer" class="teams-grid">
-            <div class="team-card team-a" id="teamA" onclick="switchTeam('A')">
+            <!-- В блоке team-card для команды А и Б добавьте ondblclick -->
+            <div class="team-card team-a" id="teamA" onclick="switchTeam('A')" ondblclick="editTeamName('A')">
                 <div class="team-header">
                     <span class="team-name" id="teamAName">Команда А</span>
                     <span class="team-score" id="teamAScore">0</span>
                 </div>
                 <ul class="player-list" id="teamAList"></ul>
             </div>
-            <div class="team-card team-b" id="teamB" onclick="switchTeam('B')">
+            <div class="team-card team-b" id="teamB" onclick="switchTeam('B')" ondblclick="editTeamName('B')">
                 <div class="team-header">
                     <span class="team-name" id="teamBName">Команда Б</span>
                     <span class="team-score" id="teamBScore">0</span>
@@ -224,6 +225,15 @@
             document.getElementById('teamAName').textContent = data.team_names.A;
             document.getElementById('teamBName').textContent = data.team_names.B;
         }
+        
+        const visibilityEl = document.getElementById('gameVisibility');
+        if (data.is_public) {
+            visibilityEl.innerHTML = '🌍 Публичная';
+            visibilityEl.style.color = 'var(--success)';
+        } else {
+            visibilityEl.innerHTML = '🔒 Приватная';
+            visibilityEl.style.color = 'var(--warning)';
+        }
 
         if (data.mode === 'ffa') {
             document.getElementById('teamsContainer').style.display = 'none';
@@ -232,12 +242,6 @@
             document.getElementById('teamsContainer').style.display = 'grid';
             document.getElementById('ffaContainer').style.display = 'none';
         }
-        
-        // В обработчике socket.on('joined', function(data) { ... })
-        document.getElementById('gameVisibility').innerHTML = 
-            data.is_public ? '🌍 Публичная' : '🔒 Приватная';
-        document.getElementById('gameVisibility').style.color = 
-            data.is_public ? 'var(--success)' : 'var(--warning)';
 
         updatePlayerList(data.players);
         updateScores(data.leaderboard);
@@ -498,5 +502,40 @@
             showNotification(ok ? 'Ссылка скопирована' : 'Не удалось скопировать ссылку', ok ? 'success' : 'error');
         });
     }
+    
+    function editTeamName(team) {
+        if (!isCreator) {
+            showNotification('Только ведущий может переименовывать команды', 'error');
+            return;
+        }
+        
+        const nameEl = document.getElementById(`team${team}Name`);
+        const currentName = nameEl.textContent;
+        const newName = prompt('Введите новое название команды:', currentName);
+        
+        if (newName && newName.trim() !== '' && newName !== currentName) {
+            // Показываем индикатор загрузки
+            nameEl.innerHTML = '<span class="spinner-small" style="width: 16px; height: 16px;"></span>';
+            
+            socket.emit('rename_team', {
+                pin: gamePin,
+                team: team,
+                new_name: newName.trim(),
+                player_token: myToken
+            });
+        }
+    }
+    
+    socket.on('team_renamed', function(data) {
+        // Обновляем название команды
+        document.getElementById(`team${data.team}Name`).textContent = data.new_name;
+        showNotification(`Команда переименована в "${data.new_name}"`, 'success');
+    });
+    
+    socket.on('error_message', function(data) {
+        showNotification(data.message, 'error');
+        // Возвращаем старое название в случае ошибки
+        socket.emit('get_game_state', { pin: gamePin }); // можно добавить такой эвент
+    });
 </script>
 {% endblock %}
