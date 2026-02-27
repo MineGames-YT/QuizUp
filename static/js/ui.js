@@ -21,8 +21,8 @@
     html.setAttribute('data-theme', theme);
     const btn = document.getElementById('themeToggle');
     if (btn) {
-      btn.setAttribute('aria-label', theme === 'dark' ? 'включить светлую тему' : 'включить тёмную тему');
-      btn.setAttribute('title', theme === 'dark' ? 'включить светлую тему' : 'включить тёмную тему');
+      btn.setAttribute('aria-label', theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему');
+      btn.setAttribute('title', theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему');
     }
   }
 
@@ -71,7 +71,7 @@
     const close = document.createElement('button');
     close.className = 'toast-close';
     close.type = 'button';
-    close.setAttribute('aria-label', 'закрыть');
+    close.setAttribute('aria-label', 'Закрыть');
     close.innerHTML = '<span aria-hidden="true">×</span>';
 
     close.addEventListener('click', function () {
@@ -82,7 +82,6 @@
     el.appendChild(close);
     container.appendChild(el);
 
-    // force animation
     requestAnimationFrame(function () {
       el.classList.add('show');
     });
@@ -101,7 +100,7 @@
     el.classList.add('hide');
     setTimeout(function () {
       try { el.remove(); } catch (e) {}
-    }, 220);
+    }, 200);
   }
 
   // ---------------- confirm dialog ----------------
@@ -116,11 +115,11 @@
 
     overlay.innerHTML = [
       '<div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="qbConfirmTitle">',
-      '  <div class="confirm-title" id="qbConfirmTitle">подтвердить</div>',
+      '  <div class="confirm-title" id="qbConfirmTitle">Подтвердить</div>',
       '  <div class="confirm-message" id="qbConfirmMessage"></div>',
       '  <div class="confirm-actions">',
-      '    <button class="btn btn-secondary" type="button" id="qbConfirmCancel">отмена</button>',
-      '    <button class="btn btn-danger" type="button" id="qbConfirmOk">да</button>',
+      '    <button class="btn btn-secondary" type="button" id="qbConfirmCancel">Отмена</button>',
+      '    <button class="btn btn-danger" type="button" id="qbConfirmOk">Да</button>',
       '  </div>',
       '</div>'
     ].join('\n');
@@ -137,10 +136,10 @@
     const okBtn = overlay.querySelector('#qbConfirmOk');
     const cancelBtn = overlay.querySelector('#qbConfirmCancel');
 
-    titleEl.textContent = opts.title || 'подтвердить';
+    titleEl.textContent = opts.title || 'Подтвердить';
     msgEl.textContent = opts.message || '';
-    okBtn.textContent = opts.okText || 'да';
-    cancelBtn.textContent = opts.cancelText || 'отмена';
+    okBtn.textContent = opts.okText || 'Да';
+    cancelBtn.textContent = opts.cancelText || 'Отмена';
 
     overlay.hidden = false;
     overlay.classList.add('show');
@@ -178,7 +177,6 @@
       overlay.addEventListener('click', onOverlayClick);
       document.addEventListener('keydown', onKey);
 
-      // focus
       setTimeout(function () {
         okBtn.focus();
       }, 0);
@@ -202,7 +200,6 @@
     if (hidden) hidden.value = value;
     if (valueEl) valueEl.textContent = labelText || '';
 
-    // mark selected option
     root.querySelectorAll('.cselect-option').forEach(function (opt) {
       opt.classList.toggle('selected', opt.getAttribute('data-value') === value);
     });
@@ -214,12 +211,11 @@
     const trigger = root.querySelector('.cselect-trigger');
     const menu = root.querySelector('.cselect-menu');
     const hidden = root.querySelector('input[type="hidden"]');
-    const placeholder = root.getAttribute('data-placeholder') || 'выбрать';
+    const placeholder = root.getAttribute('data-placeholder') || 'Выбрать';
     const valueEl = root.querySelector('.cselect-value');
 
     if (!trigger || !menu || !hidden || !valueEl) return;
 
-    // initial
     const initialValue = hidden.value || '';
     const selectedOpt = root.querySelector('.cselect-option[data-value="' + esc(initialValue) + '"]');
     if (selectedOpt) {
@@ -245,7 +241,6 @@
       closeAllSelects();
     });
 
-    // keyboard support (basic)
     trigger.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -290,7 +285,6 @@
       }
     });
 
-    // focus styling
     root.addEventListener('focusin', function () {
       root.classList.add('focus');
     });
@@ -315,14 +309,12 @@
   function getStoredPlayerName() {
     const v = (localStorage.getItem('qb_player_name') || '').trim();
     if (v) return v;
-    // backward compatibility
     return (localStorage.getItem('qb_guest_name') || '').trim();
   }
 
   function setStoredPlayerName(v) {
     v = clampText(v, 20);
     localStorage.setItem('qb_player_name', v);
-    // backward compatibility for older pages
     localStorage.setItem('qb_guest_name', v);
   }
 
@@ -339,7 +331,6 @@
     initTheme();
     initSelects();
 
-    // flash messages from server
     try {
       const msgs = window.__flash_messages;
       if (Array.isArray(msgs) && msgs.length) {

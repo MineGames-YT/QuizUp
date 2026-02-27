@@ -20,15 +20,15 @@
         </thead>
         <tbody>
             {% for user in users %}
-            <tr {% if current_user.is_authenticated and user.id == current_user.id %}style="background: rgba(16, 75, 169, 0.1);"{% endif %}>
+            <tr {% if current_user.is_authenticated and user.id == current_user.id %}style="background: rgba(37, 99, 235, 0.08);"{% endif %}>
                 <td>{{ loop.index }}</td>
                 <td>
                     <strong>{{ user.username }}</strong>
                     {% if current_user.is_authenticated and user.id == current_user.id %}
-                    <span class="badge badge-admin" style="margin-left: 10px;">Вы</span>
+                    <span class="badge badge-admin" style="margin-left: 8px;">Вы</span>
                     {% endif %}
                 </td>
-                <td><strong style="color: var(--accent-primary); font-size: 18px;">{{ user.rating }}</strong></td>
+                <td><strong style="color: var(--primary);">{{ user.rating }}</strong></td>
                 <td>{{ user.total_wins }}</td>
                 <td>{{ user.total_games }}</td>
             </tr>

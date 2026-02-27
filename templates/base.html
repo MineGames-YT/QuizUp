@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="light">
+<html lang="ru" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,13 +9,47 @@
     {% block head %}{% endblock %}
 </head>
 <body>
-    <!-- Переключатель темы (теперь внизу справа) -->
-    <button class="theme-toggle" onclick="toggleTheme()" title="сменить тему">
-        <span id="theme-icon">🌙</span>
+    <!-- Динамический фон -->
+    <div class="floating-orb orb-1"></div>
+    <div class="floating-orb orb-2"></div>
+    <div class="floating-orb orb-3"></div>
+    <div class="floating-orb orb-4"></div>
+    <div class="grid-lines"></div>
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <!-- Переключатель темы -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="Сменить тему">
+        <span id="theme-icon">☀️</span>
     </button>
     
-    <!-- Навигация -->
     <div class="container">
+        <!-- Навигация -->
         <nav class="nav">
             <div class="nav-left">
                 <img src="{{ url_for('static', filename='images/quiz-icon.png') }}" alt="Quiz" class="nav-icon">
@@ -38,13 +72,13 @@
                     </div>
                 {% else %}
                     <div class="auth-menu">
-                        <a href="{{ url_for('login') }}">Войти / Регистрация</a>
+                        <a href="{{ url_for('login') }}">Войти</a>
                     </div>
                 {% endif %}
             </div>
         </nav>
         
-        <!-- Флеш сообщения теперь будут показаны как уведомления через скрипт -->
+        <!-- Flash сообщения -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <script>
@@ -66,7 +100,7 @@
     <!-- Контейнер для уведомлений -->
     <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
     
-    <!-- Загрузочный оверлей (глобальный) -->
+    <!-- Загрузочный оверлей -->
     <div class="loading-overlay" id="loadingOverlay" style="display: none;">
         <div class="loading-content">
             <div class="loading-spinner"></div>
@@ -110,7 +144,7 @@
         }
         
         // Загрузка темы при старте
-        const savedTheme = localStorage.getItem('theme') || 'light';
+        const savedTheme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
         document.getElementById('theme-icon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
         
@@ -120,64 +154,63 @@
             if (sound) {
                 sound.currentTime = 0;
                 sound.volume = 0.5;
-                sound.play().catch(e => console.log('звук заблокирован:', e));
+                sound.play().catch(e => {});
             }
         }
         
-        // Глобальная функция показа уведомлений
+        // Показ уведомлений
         function showNotification(message, type = 'info', duration = 3000) {
             const container = document.getElementById('notification-container');
             const notification = document.createElement('div');
-            notification.className = `notification notification-${type}`;
+            notification.className = 'notification';
             notification.textContent = message;
             
-            // Цвет в зависимости от типа
             let bgColor;
             if (type === 'error') bgColor = 'var(--danger)';
             else if (type === 'success') bgColor = 'var(--success)';
-            else bgColor = 'var(--accent-primary)';
+            else bgColor = 'var(--primary)';
             
             notification.style.cssText = `
                 background: ${bgColor};
                 color: white;
-                padding: 12px 20px;
-                border-radius: 30px;
-                margin-bottom: 10px;
+                padding: 14px 22px;
+                border-radius: 12px;
+                margin-bottom: 12px;
                 box-shadow: var(--shadow-lg);
-                animation: slideInRight 0.3s ease, fadeOut 0.3s ease ${duration-300}ms forwards;
+                animation: slideIn 0.3s ease;
                 cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
             `;
             
             notification.onclick = () => notification.remove();
             container.appendChild(notification);
-            setTimeout(() => notification.remove(), duration);
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(20px)';
+                setTimeout(() => notification.remove(), 200);
+            }, duration);
         }
 
-        // копирование в буфер (с fallback), чтобы работало везде
+        // Копирование в буфер
         async function copyToClipboard(text) {
             text = (text ?? '').toString();
             if (!text) return false;
 
-            // современный api
             try {
                 if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(text);
                     return true;
                 }
-            } catch (e) {
-                // идём в fallback
-            }
+            } catch (e) {}
 
-            // fallback: временный textarea
             try {
                 const ta = document.createElement('textarea');
                 ta.value = text;
                 ta.setAttribute('readonly', '');
                 ta.style.position = 'fixed';
                 ta.style.left = '-9999px';
-                ta.style.top = '0';
                 document.body.appendChild(ta);
-                ta.focus();
                 ta.select();
                 const ok = document.execCommand('copy');
                 ta.remove();
@@ -189,7 +222,7 @@
 
         window.copyToClipboard = copyToClipboard;
 
-        // показать накопленные flash-сообщения (если были)
+        // Показ flash-сообщений
         (function flushFlashQueue() {
             try {
                 const q = window.__flashQueue || [];
@@ -199,7 +232,7 @@
             } catch (e) {}
         })();
         
-        // Глобальные функции для загрузочного оверлея
+        // Загрузочный оверлей
         function showLoading(text, subtext) {
             const overlay = document.getElementById('loadingOverlay');
             const loadingText = document.getElementById('loadingText');
@@ -213,7 +246,6 @@
             document.getElementById('loadingOverlay').style.display = 'none';
         }
         
-        // Делаем функции глобально доступными
         window.showLoading = showLoading;
         window.hideLoading = hideLoading;
     </script>

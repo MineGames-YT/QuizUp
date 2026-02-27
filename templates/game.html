@@ -8,8 +8,7 @@
     <div class="score-display" style="margin: 0;">
         <div class="score-team" id="teamADisplay">
             <div class="score-team-name">Команда А</div>
-            <div class="score-team-value" id="scoreA" style="color: var(--danger);">0</div>
-            <!-- Список игроков для FFA будет заполняться динамически -->
+            <div class="score-team-value" id="scoreA" style="color: var(--team-a);">0</div>
             <div id="ffaLeftList" style="display: none;"></div>
         </div>
     </div>
@@ -22,17 +21,17 @@
     <div class="score-display" style="margin: 0;">
         <div class="score-team" id="teamBDisplay">
             <div class="score-team-name">Команда Б</div>
-            <div class="score-team-value" id="scoreB" style="color: var(--success);">0</div>
+            <div class="score-team-value" id="scoreB" style="color: var(--team-b);">0</div>
             <div id="ffaRightList" style="display: none;"></div>
         </div>
     </div>
 </div>
 
-<!-- прогресс -->
+<!-- Прогресс -->
 <div class="progress-bar">
     <div class="progress-fill" id="progressFill" style="width: 0%"></div>
 </div>
-<div style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
+<div style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-light);">
     Вопрос <span id="currentQ">1</span> из <span id="totalQ">10</span>
 </div>
 
@@ -62,18 +61,18 @@
     </button>
 </div>
 
-<!-- статус -->
-<div id="statusBar" style="text-align: center; margin-top: 20px; font-weight: 600;"></div>
+<!-- Статус -->
+<div id="statusBar" style="text-align: center; margin-top: 20px; font-weight: 500; min-height: 24px;"></div>
 
 <!-- Оверлей ожидания -->
 <div class="waiting-overlay" id="waitingOverlay" style="display: none;">
     <div class="waiting-content">
         <div class="spinner"></div>
-        <p id="waitingText">ожидаем...</p>
+        <p id="waitingText">Ожидаем...</p>
     </div>
 </div>
 
-<!-- Модал результатов (обновлённый дизайн) -->
+<!-- Модал результатов -->
 <div class="modal-overlay" id="resultsModal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
@@ -95,9 +94,8 @@
                 <tbody id="resultsTable"></tbody>
             </table>
 
-            <!-- Новая секция: играть ещё с таймером -->
             <div style="text-align: center; margin-top: 20px;">
-                <button class="btn btn-success pulse" id="playAgainBtn" onclick="playAgain()">Играть ещё</button>
+                <button class="btn btn-success" id="playAgainBtn" onclick="playAgain()">Играть ещё</button>
                 <div class="restart-timer" id="restartTimer">Авто-возврат через 15с</div>
             </div>
         </div>
@@ -107,7 +105,7 @@
     </div>
 </div>
 
-<!-- Панель админа (только для создателя) -->
+<!-- Панель админа -->
 <div class="admin-panel" id="adminPanel" style="display: none;">
     <button class="btn btn-secondary admin-btn" onclick="skipQuestion()">Пропустить</button>
     <button class="btn btn-danger admin-btn" onclick="endGame()">Завершить</button>
@@ -163,10 +161,9 @@
 
         if (labelEl) {
             labelEl.textContent = '';
-            labelEl.style.opacity = '0.55';
+            labelEl.style.opacity = '0.5';
         }
     }
-
 
     function setWaiting(show, text) {
         const overlay = document.getElementById('waitingOverlay');
@@ -176,14 +173,12 @@
 
         if (show) {
             overlay.style.display = 'flex';
-            // даём браузеру один кадр, чтобы transition сработал ровно
             requestAnimationFrame(() => overlay.classList.add('show'));
         } else {
             overlay.classList.remove('show');
-            // прячем после плавного затухания
             setTimeout(() => {
                 if (!overlay.classList.contains('show')) overlay.style.display = 'none';
-            }, 180);
+            }, 200);
         }
     }
 
@@ -246,7 +241,6 @@
     });
 
     socket.on('question', function(data) {
-        console.log('Получен вопрос:', data);
         document.getElementById('questionText').textContent = data.question;
         document.getElementById('currentQ').textContent = data.question_number;
         document.getElementById('totalQ').textContent = data.total;
@@ -278,17 +272,17 @@
 
         if (!isMyTurn) {
             if (gameMode === 'teams' && data.current_team) {
-                setWaiting(true, 'ходит команда ' + (data.current_team === 'A' ? 'а' : 'б') + ', ждём их ответ...');
+                setWaiting(true, 'Ход команды ' + (data.current_team === 'A' ? 'А' : 'Б') + ', ждём...');
             } else {
-                setWaiting(true, 'ожидаем других игроков...');
+                setWaiting(true, 'Ожидаем других игроков...');
             }
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
 
             if (gameMode === 'teams' && data.current_team) {
                 document.getElementById('statusBar').textContent =
-                    'ход команды ' + (data.current_team === 'A' ? 'а' : 'б');
+                    'Ход команды ' + (data.current_team === 'A' ? 'А' : 'Б');
                 document.getElementById('statusBar').style.color =
-                    data.current_team === 'A' ? 'var(--danger)' : 'var(--success)';
+                    data.current_team === 'A' ? 'var(--team-a)' : 'var(--team-b)';
             }
         } else {
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
@@ -302,8 +296,6 @@
         roundActive = false;
         clearInterval(timerInterval);
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        // после ответа команды убираем полноэкранное ожидание,
-        // чтобы все увидели результат (кто ответил / верно ли).
         setWaiting(false);
         if (typeof data.correct === 'boolean') showTimerResult(data.correct);
 
@@ -320,9 +312,6 @@
 
     socket.on('score_update', function(data) {
         updateLeaderboard(data.leaderboard);
-
-        // score_update приходит всем, но состояние раунда лучше фиксировать
-        // событием round_locked/time_up. здесь только обновляем счет + статус.
 
         const status = data.is_correct ?
             `${data.answered_by} ответил верно!` :
@@ -369,7 +358,6 @@
     }
 
     socket.on('answer_result', function(data) {
-        console.log('Результат ответа:', data);
         hasAnswered = true;
         isMyTurn = false;
         roundActive = false;
@@ -380,13 +368,11 @@
         if (btn) btn.classList.add(data.correct ? 'correct' : 'wrong');
 
         playSound(data.correct ? 'correct' : 'wrong');
-
         showTimerResult(!!data.correct);
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        // в командах не закрываем экран «ожиданием», чтобы было видно подсветку ответа
         if (gameMode === 'ffa') {
-            setWaiting(true, 'ждём остальных игроков...');
+            setWaiting(true, 'Ждём остальных игроков...');
         } else {
             setWaiting(false);
         }
@@ -396,7 +382,7 @@
         clearInterval(timerInterval);
         roundActive = false;
 
-        document.getElementById('statusBar').textContent = 'время вышло!';
+        document.getElementById('statusBar').textContent = 'Время вышло!';
         document.getElementById('statusBar').style.color = 'var(--danger)';
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
@@ -419,22 +405,23 @@
         if (data.mode === 'teams') {
             if (data.winner === 'draw') {
                 winnerText.textContent = 'Ничья!';
-                winnerText.style.color = 'var(--warning)';
+                winnerText.style.color = '#d69e2e';
             } else {
                 winnerText.textContent = `Победила команда ${data.winner === 'A' ? 'А' : 'Б'}!`;
-                winnerText.style.color = data.winner === 'A' ? 'var(--danger)' : 'var(--success)';
+                winnerText.style.color = data.winner === 'A' ? 'var(--team-a)' : 'var(--team-b)';
             }
         } else {
             winnerText.textContent = `Победитель: ${data.winner}`;
+            winnerText.style.color = 'var(--primary)';
         }
 
         const tbody = document.getElementById('resultsTable');
         tbody.innerHTML = (data.stats || []).map((s, i) => `
-            <tr class="fade-in">
+            <tr>
                 <td><strong>${i + 1}</strong></td>
                 <td>${s.name}</td>
                 <td>${s.team ? 'Команда ' + s.team : '—'}</td>
-                <td><strong style="color: var(--accent-primary);">${s.score}</strong></td>
+                <td><strong style="color: var(--accent);">${s.score}</strong></td>
                 <td>${s.correct}/${s.correct + s.wrong}</td>
             </tr>
         `).join('');
@@ -497,9 +484,6 @@
             } else if (timeLeft <= 10) {
                 if (timerEl) timerEl.classList.add('warning');
                 if (timerBox) timerBox.classList.add('timer-warning');
-            } else {
-                if (timerEl) timerEl.classList.remove('warning', 'danger');
-                if (timerBox) timerBox.classList.remove('timer-warning', 'timer-danger');
             }
 
             if (timeLeft <= 0) {
@@ -510,11 +494,9 @@
 
     function submitAnswer(index) {
         if (hasAnswered || !isMyTurn || !roundActive) {
-            console.log('Нельзя ответить: hasAnswered=' + hasAnswered + ', isMyTurn=' + isMyTurn + ', roundActive=' + roundActive);
             return;
         }
 
-        console.log('Отправка ответа:', index);
         hasAnswered = true;
         roundActive = false;
         clearInterval(timerInterval);
@@ -530,31 +512,17 @@
         });
     }
 
-    function exportResults() {
-        window.location.href = `/api/game/${gamePin}/export`;
-    }
-
     function skipQuestion() {
         socket.emit('admin_skip', { pin: gamePin, player_token: myToken });
     }
 
     function endGame() {
-        const ask = (window.QB_UI && typeof window.QB_UI.confirm === 'function')
-            ? window.QB_UI.confirm({
-                title: 'завершить игру',
-                message: 'точно завершить игру? все увидят результаты.',
-                okText: 'да',
-                cancelText: 'нет'
-            })
-            : Promise.resolve(confirm('Завершить игру?'));
-
-        Promise.resolve(ask).then((ok) => {
-            if (!ok) return;
-            socket.emit('admin_end', { pin: gamePin, player_token: myToken });
-        });
+        const ask = confirm('Завершить игру? Все увидят результаты.');
+        if (!ask) return;
+        socket.emit('admin_end', { pin: gamePin, player_token: myToken });
     }
 
-    socket.on('game_resumed' , function() {
+    socket.on('game_resumed', function() {
         socket.emit('get_question', { pin: gamePin });
     });
 

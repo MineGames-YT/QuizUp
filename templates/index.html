@@ -4,14 +4,14 @@
 
 {% block content %}
 <div class="main-menu">
-    <!-- присоединиться к игре -->
+    <!-- Присоединиться к игре -->
     <div class="menu-card">
         <h2>Присоединиться</h2>
         <p>Введите PIN-код, чтобы войти в игру</p>
         <form id="joinForm" action="/join" method="POST">
             <div class="form-group">
                 <input type="text" name="pin" id="joinPin" placeholder="PIN-код" 
-                       maxlength="6" required style="text-transform: uppercase; text-align: center;">
+                       maxlength="6" required style="text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 4px;">
             </div>
             <button type="submit" class="btn btn-primary btn-large btn-full">
                 Войти
@@ -19,23 +19,23 @@
         </form>
     </div>
     
-    <!-- создать игру -->
+    <!-- Создать игру -->
     <div class="menu-card">
         <h2>Создать игру</h2>
         <p>Настройте свою викторину</p>
         <form id="createForm">
             <div class="form-group">
                 <select name="topic" id="gameTopic" class="js-custom-select" required>
-                    <option value="" disabled selected>Тема</option>
+                    <option value="" disabled selected>Выберите тему</option>
                     {% for topic in topics %}
                     <option value="{{ topic }}">{{ topic.title() }}</option>
                     {% endfor %}
-                    <option value="__custom__">своя тема...</option>
+                    <option value="__custom__">Своя тема...</option>
                 </select>
             </div>
 
             <div class="form-group" id="customTopicField" style="display: none;">
-                <input type="text" id="customTopic" placeholder="например: аниме 2000-х">
+                <input type="text" id="customTopic" placeholder="Например: аниме 2000-х">
             </div>
             
             <div class="form-row">
@@ -57,29 +57,29 @@
             <div class="form-row">
                 <div class="form-group">
                     <select name="questions_count" id="gameQuestions" class="js-custom-select">
-                        <option value="5" selected>5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
+                        <option value="5" selected>5 вопросов</option>
+                        <option value="6">6 вопросов</option>
+                        <option value="7">7 вопросов</option>
                     </select>
                 </div>
             </div>
 
             <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                <input type="checkbox" id="bonusEnabled" style="width: auto;">
-                <label for="bonusEnabled">Бонус за скорость</label>
+                <input type="checkbox" id="bonusEnabled" checked style="width: auto; cursor: pointer;">
+                <label for="bonusEnabled" style="margin: 0; cursor: pointer;">Бонус за скорость</label>
             </div>
             
             <button type="submit" class="btn btn-primary btn-large btn-full">
-                Создать
+                Создать игру
             </button>
         </form>
     </div>
 </div>
 
-<!-- Как играть (оставлен для информации) -->
-<div class="card" style="margin-top: 30px;">
-    <h3 style="margin-bottom: 15px;">Как играть</h3>
-    <ol style="padding-left: 20px; color: var(--text-secondary);">
+<!-- Как играть -->
+<div class="card" style="margin-top: 24px;">
+    <h3 style="margin-bottom: 16px; font-size: 18px;">Как играть</h3>
+    <ol style="padding-left: 20px; color: var(--text-medium); line-height: 2;">
         <li>Создайте игру или присоединитесь по PIN-коду</li>
         <li>Ожидайте других игроков в лобби</li>
         <li>Отвечайте на вопросы быстрее соперников</li>
@@ -118,7 +118,7 @@
     const playerToken = getOrCreatePlayerToken();
     const playerName = getPlayerName();
 
-    // если пришли по инвайту вида /?pin=XXXXXX — подставим pin в форму
+    // Подстановка PIN из URL
     (function prefillPinFromUrl() {
         try {
             const p = new URLSearchParams(window.location.search).get('pin');

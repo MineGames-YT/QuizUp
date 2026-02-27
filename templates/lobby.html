@@ -4,27 +4,27 @@
 
 {% block content %}
 <div class="lobby-container">
-    <!-- PIN-код и информация об игре (центрированы) -->
+    <!-- PIN-код и информация об игре -->
     <div class="game-info-card">
         <div class="pin-section">
             <span class="pin-label">PIN</span>
             <div class="pin-code-wrapper">
                 <span class="pin-code" id="gamePin">------</span>
                 <button class="btn-icon" onclick="copyPin()" title="Копировать PIN">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                 </button>
                 <button class="btn-icon" onclick="copyInvite()" title="Копировать ссылку-приглашение">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13"></path>
                         <path d="M14 11a5 5 0 0 1 0 7L12.5 19.5a5 5 0 1 1-7-7L7 11"></path>
                     </svg>
                 </button>
             </div>
             <button class="invite-btn" onclick="copyInvite()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4v16h16"></path>
                     <polyline points="20 10 12 18 4 10"></polyline>
                 </svg>
@@ -50,7 +50,7 @@
             </div>
             <div class="detail-item">
                 <span class="detail-label">Бонус</span>
-                <span class="detail-value" id="bonusStatus">✔</span>
+                <span class="detail-value" id="bonusStatus">✓</span>
             </div>
         </div>
     </div>
@@ -70,14 +70,14 @@
         <div id="teamsContainer" class="teams-grid">
             <div class="team-card team-a" id="teamA" onclick="switchTeam('A')">
                 <div class="team-header">
-                    <span class="team-name" id="teamAName" {% if is_creator %}ondblclick="editTeamName('A')"{% endif %}>Команда А</span>
+                    <span class="team-name" id="teamAName">Команда А</span>
                     <span class="team-score" id="teamAScore">0</span>
                 </div>
                 <ul class="player-list" id="teamAList"></ul>
             </div>
             <div class="team-card team-b" id="teamB" onclick="switchTeam('B')">
                 <div class="team-header">
-                    <span class="team-name" id="teamBName" {% if is_creator %}ondblclick="editTeamName('B')"{% endif %}>Команда Б</span>
+                    <span class="team-name" id="teamBName">Команда Б</span>
                     <span class="team-score" id="teamBScore">0</span>
                 </div>
                 <ul class="player-list" id="teamBList"></ul>
@@ -89,7 +89,7 @@
             <ul class="player-list" id="ffaList"></ul>
         </div>
 
-        <!-- Предупреждение о минимальном количестве игроков в командах -->
+        <!-- Предупреждение о минимальном количестве игроков -->
         <div id="minPlayersWarning" class="min-players-warning" style="display: none; text-align: center;">
             Для начала игры в каждой команде должен быть хотя бы один игрок.
         </div>
@@ -97,7 +97,7 @@
 
     <!-- Управление -->
     <div class="lobby-actions">
-        <button id="startBtn" class="btn btn-primary btn-large pulse" style="display: none;" onclick="startGame()">
+        <button id="startBtn" class="btn btn-primary btn-large" style="display: none;" onclick="startGame()">
             Начать игру
         </button>
         <div id="waitingMessage" class="waiting-message">
@@ -182,7 +182,7 @@
         document.getElementById('gameQuestions').textContent = data.mode === 'teams' 
             ? data.questions_per_team + ' на команду' 
             : data.questions_count + ' всего';
-        document.getElementById('bonusStatus').textContent = data.bonus_enabled ? '✔' : '✘';
+        document.getElementById('bonusStatus').textContent = data.bonus_enabled ? '✓' : '—';
 
         if (data.team_names) {
             document.getElementById('teamAName').textContent = data.team_names.A;
@@ -268,7 +268,7 @@
         if (gameMode === 'ffa') {
             const ffaList = document.getElementById('ffaList');
             ffaList.innerHTML = players.map(p => `
-                <li class="player-item fade-in">
+                <li class="player-item">
                     <div class="player-info">
                         ${getAvatarHtml(p.name)}
                         <span class="player-name">${p.name}</span>
@@ -282,7 +282,7 @@
             const teamB = players.filter(p => p.team === 'B');
 
             document.getElementById('teamAList').innerHTML = teamA.map(p => `
-                <li class="player-item fade-in">
+                <li class="player-item">
                     <div class="player-info">
                         ${getAvatarHtml(p.name)}
                         <span class="player-name">${p.name}</span>
@@ -293,7 +293,7 @@
             `).join('');
 
             document.getElementById('teamBList').innerHTML = teamB.map(p => `
-                <li class="player-item fade-in">
+                <li class="player-item">
                     <div class="player-info">
                         ${getAvatarHtml(p.name)}
                         <span class="player-name">${p.name}</span>
@@ -392,15 +392,14 @@
 
     function copyPin() {
         window.copyToClipboard(gamePin).then((ok) => {
-            showNotification(ok ? 'pin скопирован' : 'не удалось скопировать pin', ok ? 'success' : 'error');
+            showNotification(ok ? 'PIN скопирован' : 'Не удалось скопировать PIN', ok ? 'success' : 'error');
         });
     }
 
     function copyInvite() {
-        // открываем главную страницу, pin подставится автоматически
         const url = `${window.location.origin}/?pin=${encodeURIComponent(gamePin)}`;
         window.copyToClipboard(url).then((ok) => {
-            showNotification(ok ? 'ссылка-приглашение скопирована' : 'не удалось скопировать ссылку', ok ? 'success' : 'error');
+            showNotification(ok ? 'Ссылка скопирована' : 'Не удалось скопировать ссылку', ok ? 'success' : 'error');
         });
     }
 </script>

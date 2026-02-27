@@ -14,27 +14,27 @@
         {% else %}
             <div class="avatar-placeholder">{{ current_user.username[0]|upper }}</div>
         {% endif %}
-        <h3>{{ current_user.username }}</h3>
+        <h3 style="margin-top: 12px;">{{ current_user.username }}</h3>
     </div>
     
     <div class="form-row" style="text-align: center; margin-bottom: 30px;">
-        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
-            <div style="font-size: 32px; font-weight: 800; color: var(--accent-primary);">
+        <div class="card" style="padding: 20px;">
+            <div style="font-size: 32px; font-weight: 700; color: var(--primary);">
                 {{ current_user.rating }}
             </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Рейтинг</div>
+            <div style="color: var(--text-light); font-size: 13px;">Рейтинг</div>
         </div>
-        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
-            <div style="font-size: 32px; font-weight: 800; color: var(--success);">
+        <div class="card" style="padding: 20px;">
+            <div style="font-size: 32px; font-weight: 700; color: var(--success);">
                 {{ current_user.total_games }}
             </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Игр сыграно</div>
+            <div style="color: var(--text-light); font-size: 13px;">Игр сыграно</div>
         </div>
-        <div class="card" style="background: var(--bg-tertiary); padding: 20px;">
-            <div style="font-size: 32px; font-weight: 800; color: var(--warning);">
+        <div class="card" style="padding: 20px;">
+            <div style="font-size: 32px; font-weight: 700; color: var(--warning);">
                 {{ current_user.total_wins }}
             </div>
-            <div style="color: var(--text-muted); font-size: 13px;">Побед</div>
+            <div style="color: var(--text-light); font-size: 13px;">Побед</div>
         </div>
     </div>
     
@@ -47,14 +47,14 @@
         <div class="form-group">
             <label>Загрузить аватар</label>
             <input type="file" name="avatar" accept="image/*">
-            <small style="color: var(--text-muted);">Максимум 2MB, форматы: PNG, JPG, JPEG, GIF</small>
+            <small style="color: var(--text-light); display: block; margin-top: 4px;">Максимум 2MB, форматы: PNG, JPG, JPEG, GIF</small>
         </div>
         
-        <button type="submit" class="btn btn-primary btn-large">Сохранить изменения</button>
+        <button type="submit" class="btn btn-primary">Сохранить изменения</button>
     </form>
 </div>
 
-<div class="card" style="margin-top: 30px;">
+<div class="card" style="margin-top: 24px;">
     <div class="card-header">
         <h3 class="card-title">История игр</h3>
     </div>
@@ -72,7 +72,7 @@
         </thead>
         <tbody>
             {% for s in stats %}
-            <tr class="fade-in">
+            <tr>
                 <td>{{ s.game.topic }}</td>
                 <td>{{ 'Команды' if s.game.mode == 'teams' else 'FFA' }}</td>
                 <td><strong>{{ s.score }}</strong></td>
@@ -83,7 +83,7 @@
         </tbody>
     </table>
     {% else %}
-    <p style="text-align: center; color: var(--text-muted);">Пока нет игр</p>
+    <p style="text-align: center; color: var(--text-light); padding: 20px;">Пока нет игр</p>
     {% endif %}
 </div>
 {% endblock %}
