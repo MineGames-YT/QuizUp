@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Рейтинг - QuizBattle{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Топ игроков</h2>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Игрок</th>
+                <th>Рейтинг</th>
+                <th>Побед</th>
+                <th>Игр</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr {% if current_user.is_authenticated and user.id == current_user.id %}style="background: rgba(16, 75, 169, 0.1);"{% endif %}>
+                <td>{{ loop.index }}</td>
+                <td>
+                    <strong>{{ user.username }}</strong>
+                    {% if current_user.is_authenticated and user.id == current_user.id %}
+                    <span class="badge badge-admin" style="margin-left: 10px;">Вы</span>
+                    {% endif %}
+                </td>
+                <td><strong style="color: var(--accent-primary); font-size: 18px;">{{ user.rating }}</strong></td>
+                <td>{{ user.total_wins }}</td>
+                <td>{{ user.total_games }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

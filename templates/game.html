@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Игра - QuizUp{% endblock %}
+{% block title %}Игра - QuizBattle{% endblock %}
 
 {% block content %}
 <!-- Таймер и счет -->
@@ -93,13 +93,14 @@
         </div>
         <div class="modal-footer">
             <a href="/" class="btn btn-primary">На главную</a>
+            <button class="btn btn-secondary" onclick="exportResults()">Скачать результаты</button>
         </div>
     </div>
 </div>
 
 <!-- Панель админа (только для создателя) -->
 <div class="admin-panel" id="adminPanel" style="display: none;">
-    <button class="btn btn-secondary admin-btn" onclick="pauseGame()">Пауза</button>
+    <!-- Кнопка паузы УДАЛЕНА -->
     <button class="btn btn-secondary admin-btn" onclick="skipQuestion()">Пропустить</button>
     <button class="btn btn-danger admin-btn" onclick="endGame()">Завершить</button>
 </div>
@@ -131,12 +132,10 @@
     }
 
     function getGuestName() {
-        const stored = ((localStorage.getItem('qb_player_name') || localStorage.getItem('qb_guest_name') || '') + '').trim();
-        if (stored) return stored;
         {% if current_user.is_authenticated %}
         return '{{ current_user.username }}';
         {% else %}
-        return '';
+        return (localStorage.getItem('qb_guest_name') || '').trim();
         {% endif %}
     }
 
@@ -160,39 +159,32 @@
         myTeam = data.team;
         isCreator = !!data.is_creator;
 
-        // ведущему показываем панель
         if (isCreator) {
             document.getElementById('adminPanel').style.display = 'flex';
         }
 
-        // если ffa - скрываем командный счёт
         if (gameMode === 'ffa') {
             document.getElementById('teamADisplay').style.display = 'none';
             document.getElementById('teamBDisplay').style.display = 'none';
         }
 
-        // синхронизируем счёт сразу
         if (data.leaderboard && data.leaderboard.A !== undefined) {
             document.getElementById('scoreA').textContent = data.leaderboard.A;
             document.getElementById('scoreB').textContent = data.leaderboard.B;
         }
 
-        // просим текущий вопрос (на случай, если мы зашли не с самого старта)
         socket.emit('get_question', { pin: gamePin });
     });
 
     socket.on('question', function(data) {
-        // обновляем вопрос
         document.getElementById('questionText').textContent = data.question;
         document.getElementById('currentQ').textContent = data.question_number;
         document.getElementById('totalQ').textContent = data.total;
 
-        // варианты
         data.options.forEach((opt, i) => {
             document.getElementById('opt' + i).textContent = opt;
         });
 
-        // сброс
         hasAnswered = false;
         document.querySelectorAll('.option-btn').forEach(btn => {
             btn.classList.remove('correct', 'wrong');
@@ -201,20 +193,15 @@
         document.getElementById('statusBar').textContent = '';
         document.getElementById('waitingOverlay').style.display = 'none';
 
-        // прогресс
         const progress = (data.question_number / data.total) * 100;
         document.getElementById('progressFill').style.width = progress + '%';
 
-        // счёт (если прилетел)
         if (data.leaderboard && data.leaderboard.A !== undefined) {
             document.getElementById('scoreA').textContent = data.leaderboard.A;
             document.getElementById('scoreB').textContent = data.leaderboard.B;
         }
 
-        // таймер показываем всем (удобнее следить за ходом)
         startTimer(data.time_left || 30);
-
-        // очередь
         isMyTurn = data.is_your_turn !== false;
 
         if (!isMyTurn) {
@@ -228,13 +215,11 @@
                     data.current_team === 'A' ? 'var(--danger)' : 'var(--success)';
             }
         } else {
-            // мой ход: можно отвечать
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
         }
     });
 
     socket.on('round_locked', function(data) {
-        // если кто-то из моей команды уже ответил - закрываем кнопки у остальных
         if (gameMode !== 'teams') return;
 
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
@@ -243,7 +228,6 @@
 
             clearInterval(timerInterval);
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-
             document.getElementById('waitingOverlay').style.display = 'flex';
 
             const msg = data.correct ?
@@ -255,13 +239,11 @@
     });
 
     socket.on('score_update', function(data) {
-        // счёт
         if (data.leaderboard && data.leaderboard.A !== undefined) {
-            document.getElementById('scoreA').textContent = data.leaderboard.A;
-            document.getElementById('scoreB').textContent = data.leaderboard.B;
+            updateScore('A', data.leaderboard.A);
+            updateScore('B', data.leaderboard.B);
         }
 
-        // кто ответил
         const status = data.is_correct ?
             `${data.answered_by} ответил верно!` :
             `${data.answered_by} ошибся`;
@@ -271,19 +253,26 @@
             'var(--success)' : 'var(--danger)';
     });
 
+    // Функция для анимированного обновления счёта
+    function updateScore(team, value) {
+        const el = document.getElementById('score' + team);
+        if (el.textContent !== value) {
+            el.textContent = value;
+            el.classList.add('pop');
+            setTimeout(() => el.classList.remove('pop'), 200);
+        }
+    }
+
     socket.on('answer_result', function(data) {
         hasAnswered = true;
         isMyTurn = false;
         clearInterval(timerInterval);
 
-        // подсветка
         const btn = document.querySelector(`[data-index="${data.answer}"]`);
         if (btn) btn.classList.add(data.correct ? 'correct' : 'wrong');
 
-        // звук
         playSound(data.correct ? 'correct' : 'wrong');
 
-        // блок
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
         document.getElementById('waitingOverlay').style.display = 'flex';
     });
@@ -309,7 +298,6 @@
         const modal = document.getElementById('resultsModal');
         modal.style.display = 'flex';
 
-        // победитель
         const winnerText = document.getElementById('winnerText');
         if (data.mode === 'teams') {
             if (data.winner === 'draw') {
@@ -323,7 +311,6 @@
             winnerText.textContent = `победитель: ${data.winner}`;
         }
 
-        // таблица
         const tbody = document.getElementById('resultsTable');
         tbody.innerHTML = (data.stats || []).map((s, i) => `
             <tr>
@@ -336,7 +323,7 @@
     });
 
     socket.on('error_message', function(data) {
-        QB_UI.toast(data.message, 'error', 4500);
+        showNotification(data.message, 'error');
     });
 
     function startTimer(seconds) {
@@ -380,32 +367,23 @@
             answer: index
         });
     }
-    // админ функции
-    function pauseGame() {
-        socket.emit('admin_pause', { pin: gamePin, player_token: myToken });
+
+    function exportResults() {
+        window.location.href = `/api/game/${gamePin}/export`;
     }
 
+    // Функции админа (пауза удалена)
     function skipQuestion() {
         socket.emit('admin_skip', { pin: gamePin, player_token: myToken });
     }
 
     function endGame() {
-        QB_UI.confirm({
-            title: 'завершить игру',
-            message: 'точно завершить игру прямо сейчас?',
-            okText: 'завершить',
-            cancelText: 'отмена'
-        }).then(function (ok) {
-            if (ok) socket.emit('admin_end', { pin: gamePin, player_token: myToken });
-        });
+        if (confirm('завершить игру?')) {
+            socket.emit('admin_end', { pin: gamePin, player_token: myToken });
+        }
     }
 
-    socket.on('game_paused', function() {
-        QB_UI.toast('игра на паузе', 'info');
-    });
-
     socket.on('game_resumed', function() {
-        // просто синхронизируем вопрос (таймер стартанёт заново)
         socket.emit('get_question', { pin: gamePin });
     });
 </script>

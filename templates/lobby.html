@@ -1,78 +1,87 @@
 {% extends "base.html" %}
 
-{% block title %}Лобби - QuizUp{% endblock %}
+{% block title %}Лобби - QuizBattle{% endblock %}
 
 {% block content %}
-<!-- PIN код -->
-<div class="pin-display">
-    <div class="pin-label">PIN-код игры</div>
-    <div class="pin-code" id="gamePin">------</div>
-    <button class="btn btn-secondary" style="margin-top: 15px;" onclick="copyPin()">
-        Копировать
-    </button>
-</div>
+<div class="lobby-container">
+    <!-- PIN-код и информация об игре -->
+    <div class="game-info-card">
+        <div class="pin-section">
+            <div class="pin-label">PIN-код игры</div>
+            <div class="pin-code-wrapper">
+                <span class="pin-code" id="gamePin">------</span>
+                <button class="btn-icon" onclick="copyPin()" title="Копировать PIN">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="game-details">
+            <div class="detail-item">
+                <span class="detail-label">Тема</span>
+                <span class="detail-value" id="gameTopic">загрузка...</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Сложность</span>
+                <span class="detail-value" id="gameDifficulty"></span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Режим</span>
+                <span class="detail-value" id="gameMode"></span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Вопросов</span>
+                <span class="detail-value" id="gameQuestions"></span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Бонус за скорость</span>
+                <span class="detail-value" id="bonusStatus">✔</span>
+            </div>
+        </div>
+    </div>
 
-<!-- информация об игре -->
-<div class="card">
-    <div class="card-header">
-        <div>
-            <h2 class="card-title" id="gameTopic">загрузка...</h2>
-            <span id="gameSettings" style="color: var(--text-muted); font-size: 13px;"></span>
+    <!-- Команды / FFA -->
+    <div class="players-section">
+        <div class="section-header">
+            <h3>Игроки <span class="player-count" id="playerCount">0</span></h3>
+            {% if current_user.is_authenticated %}
+                <span class="badge badge-admin">Вы: {{ current_user.username }}</span>
+            {% endif %}
         </div>
-        <span class="badge" id="gameModeBadge">команды</span>
-    </div>
-    
-    <!-- Команды -->
-    <div class="teams-grid" id="teamsContainer">
-        <div class="team-box team-a">
-            <div class="team-header">
-                <span class="team-name">Команда А</span>
-                <span class="team-score" id="scoreA">0</span>
+
+        <!-- Для командного режима -->
+        <div id="teamsContainer" class="teams-grid">
+            <div class="team-card team-a">
+                <div class="team-header">
+                    <h4>Команда А</h4>
+                    <span class="team-score" id="teamAScore">0</span>
+                </div>
+                <ul class="player-list" id="teamAList"></ul>
             </div>
-            <ul class="player-list" id="teamAList">
-                <li style="color: var(--text-muted); text-align: center; padding: 20px;">
-                    Ожидание...
-                </li>
-            </ul>
-        </div>
-        
-        <div class="vs-divider">VS</div>
-        
-        <div class="team-box team-b">
-            <div class="team-header">
-                <span class="team-name">Команда Б</span>
-                <span class="team-score" id="scoreB">0</span>
+            <div class="team-card team-b">
+                <div class="team-header">
+                    <h4>Команда Б</h4>
+                    <span class="team-score" id="teamBScore">0</span>
+                </div>
+                <ul class="player-list" id="teamBList"></ul>
             </div>
-            <ul class="player-list" id="teamBList">
-                <li style="color: var(--text-muted); text-align: center; padding: 20px;">
-                    Ожидание...
-                </li>
-            </ul>
+        </div>
+
+        <!-- Для FFA режима -->
+        <div id="ffaContainer" class="ffa-grid" style="display: none;">
+            <ul class="player-list" id="ffaList"></ul>
         </div>
     </div>
-    
-    <!-- FFA режим -->
-    <div id="ffaContainer" style="display: none;">
-        <ul class="player-list" id="ffaList"></ul>
-    </div>
-    
-    <!-- кнопки управления -->
-    <div style="text-align: center; margin-top: 20px;">
+
+    <!-- Управление -->
+    <div class="lobby-actions">
         <button id="startBtn" class="btn btn-primary btn-large" style="display: none;" onclick="startGame()">
-            начать игру
+            Начать игру
         </button>
-        <p id="waitingText" style="color: var(--text-muted); margin-top: 10px;">
-            ожидание игроков...
-        </p>
+        <p id="waitingText" class="waiting-message">Ожидание игроков...</p>
     </div>
-</div>
-
-<!-- список игроков для админа (с возможностью кика) -->
-<div class="card" id="adminPanel" style="display: none;">
-    <div class="card-header">
-        <h3 class="card-title">управление игроками</h3>
-    </div>
-    <div id="adminPlayerList"></div>
 </div>
 {% endblock %}
 
@@ -86,7 +95,6 @@
     let myName = '';
     let myToken = '';
 
-    // helpers
     function getOrCreatePlayerToken() {
         let token = localStorage.getItem('qb_player_token');
         if (!token) {
@@ -97,19 +105,16 @@
     }
 
     function getGuestName() {
-        const stored = ((localStorage.getItem('qb_player_name') || localStorage.getItem('qb_guest_name') || '') + '').trim();
-        if (stored) return stored;
         {% if current_user.is_authenticated %}
         return '{{ current_user.username }}';
         {% else %}
-        return '';
+        return (localStorage.getItem('qb_guest_name') || '').trim();
         {% endif %}
     }
 
     myToken = getOrCreatePlayerToken();
     myName = getGuestName();
 
-    // получаем pin из url
     const urlParams = new URLSearchParams(window.location.search);
     gamePin = (urlParams.get('pin') || '').toUpperCase();
 
@@ -130,44 +135,46 @@
     socket.on('joined', function(data) {
         gameMode = data.mode;
         isCreator = !!data.is_creator;
-        myName = data.name; // сервер может нормализовать
+        myName = data.name;
 
+        // Заполняем информацию об игре
+        document.getElementById('gameTopic').textContent = data.topic;
+        document.getElementById('gameDifficulty').textContent = 
+            data.difficulty === 'easy' ? 'Легко' : data.difficulty === 'medium' ? 'Средне' : 'Сложно';
+        document.getElementById('gameMode').textContent = data.mode === 'teams' ? 'Команды' : 'FFA';
+        document.getElementById('gameQuestions').textContent = data.mode === 'teams' 
+            ? data.questions_per_team + ' на команду' 
+            : data.questions_count + ' всего';
+        document.getElementById('bonusStatus').textContent = data.bonus_enabled ? '✔' : '✘';
+
+        // Показываем нужный контейнер
         if (data.mode === 'ffa') {
             document.getElementById('teamsContainer').style.display = 'none';
             document.getElementById('ffaContainer').style.display = 'block';
-            document.getElementById('gameModeBadge').textContent = 'все против всех';
         } else {
-            document.getElementById('gameModeBadge').textContent = 'команды';
-        }
-
-        document.getElementById('gameTopic').textContent = data.topic;
-
-        if (data.mode === 'teams') {
-            document.getElementById('gameSettings').textContent =
-                data.difficulty + ' • ' + data.questions_per_team + ' вопросов на команду • ' + data.time_limit + ' сек';
-        } else {
-            document.getElementById('gameSettings').textContent =
-                data.difficulty + ' • ' + data.questions_count + ' вопросов • ' + data.time_limit + ' сек';
+            document.getElementById('teamsContainer').style.display = 'grid';
+            document.getElementById('ffaContainer').style.display = 'none';
         }
 
         updatePlayerList(data.players);
+        updateScores(data.leaderboard);
     });
 
     socket.on('player_joined', function(data) {
         updatePlayerList(data.players);
-
+        document.getElementById('playerCount').textContent = data.players.length;
         if (data.players.length >= 2) {
-            document.getElementById('waitingText').textContent = 'можно начинать';
+            document.getElementById('waitingText').textContent = 'Можно начинать';
         } else {
-            document.getElementById('waitingText').textContent = 'ожидание игроков...';
+            document.getElementById('waitingText').textContent = 'Ожидание игроков...';
         }
     });
 
     socket.on('player_left', function(data) {
         updatePlayerList(data.players);
-
+        document.getElementById('playerCount').textContent = data.players.length;
         if (data.players.length < 2) {
-            document.getElementById('waitingText').textContent = 'ожидание игроков...';
+            document.getElementById('waitingText').textContent = 'Ожидание игроков...';
         }
     });
 
@@ -177,51 +184,58 @@
     });
 
     socket.on('error_message', function(data) {
-        QB_UI.toast(data.message, 'error', 4500);
+        showNotification(data.message, 'error');
     });
 
     function updatePlayerList(players) {
-        // команды
-        const teamA = players.filter(p => p.team === 'A');
-        const teamB = players.filter(p => p.team === 'B');
+        document.getElementById('playerCount').textContent = players.length;
 
-        const listA = document.getElementById('teamAList');
-        if (teamA.length === 0) {
-            listA.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 20px;">ожидание...</li>';
-        } else {
-            listA.innerHTML = teamA.map(p => `
-                <li class="player-item">
-                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
-                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
-                </li>
-            `).join('');
-        }
-
-        const listB = document.getElementById('teamBList');
-        if (teamB.length === 0) {
-            listB.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 20px;">ожидание...</li>';
-        } else {
-            listB.innerHTML = teamB.map(p => `
-                <li class="player-item">
-                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
-                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
-                </li>
-            `).join('');
-        }
-
-        // ffa
         if (gameMode === 'ffa') {
-            document.getElementById('ffaList').innerHTML = players.map(p => `
+            const ffaList = document.getElementById('ffaList');
+            ffaList.innerHTML = players.map(p => `
                 <li class="player-item">
-                    <span class="player-name">${p.name}${p.connected === false ? ' <span style="color: var(--text-muted); font-size: 12px;">(offline)</span>' : ''}</span>
+                    <span class="player-name">${p.name}</span>
                     ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                    ${!p.connected ? '<span class="offline-badge">отключился</span>' : ''}
+                </li>
+            `).join('');
+        } else {
+            const teamA = players.filter(p => p.team === 'A');
+            const teamB = players.filter(p => p.team === 'B');
+
+            document.getElementById('teamAList').innerHTML = teamA.map(p => `
+                <li class="player-item">
+                    <span class="player-name">${p.name}</span>
+                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                    ${!p.connected ? '<span class="offline-badge">отключился</span>' : ''}
+                </li>
+            `).join('');
+
+            document.getElementById('teamBList').innerHTML = teamB.map(p => `
+                <li class="player-item">
+                    <span class="player-name">${p.name}</span>
+                    ${p.name === myName ? '<span class="badge badge-admin">вы</span>' : ''}
+                    ${!p.connected ? '<span class="offline-badge">отключился</span>' : ''}
                 </li>
             `).join('');
         }
 
-        // кнопка старта только у ведущего
-        const canStart = isCreator && players.length >= 2;
-        document.getElementById('startBtn').style.display = canStart ? 'inline-flex' : 'none';
+        // Показываем кнопку старта только создателю, если игроков >= 2
+        const startBtn = document.getElementById('startBtn');
+        if (isCreator && players.length >= 2) {
+            startBtn.style.display = 'inline-flex';
+            document.getElementById('waitingText').style.display = 'none';
+        } else {
+            startBtn.style.display = 'none';
+            document.getElementById('waitingText').style.display = 'block';
+        }
+    }
+
+    function updateScores(leaderboard) {
+        if (leaderboard && leaderboard.A !== undefined) {
+            document.getElementById('teamAScore').textContent = leaderboard.A;
+            document.getElementById('teamBScore').textContent = leaderboard.B;
+        }
     }
 
     function startGame() {
@@ -229,9 +243,9 @@
     }
 
     function copyPin() {
-        navigator.clipboard.writeText(gamePin)
-            .then(() => QB_UI.toast('pin скопирован: ' + gamePin, 'success'))
-            .catch(() => QB_UI.toast('не удалось скопировать pin', 'error', 4500));
+        navigator.clipboard.writeText(gamePin).then(() => {
+            showNotification('PIN скопирован!', 'success');
+        });
     }
 </script>
 {% endblock %}

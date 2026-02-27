@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-десктопная версия QuizUp
+десктопная версия quizbattle
 запускает сервер и открывает окно приложения
 """
 
@@ -37,7 +37,7 @@ def main():
     # создаем окно приложения
     print("[*] открытие окна приложения")
     window = webview.create_window(
-        title='QuizUp - Командная Викторина',
+        title='QuizBattle - Командная Викторина',
         url='http://127.0.0.1:5000',
         width=1200,
         height=800,
