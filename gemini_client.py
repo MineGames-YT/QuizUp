@@ -6,7 +6,6 @@
 
 почему отдельный модуль:
 - чтобы app.py оставался читаемым
-- чтобы можно было легко добавить других провайдеров по такому же шаблону
 """
 
 from __future__ import annotations
@@ -55,6 +54,10 @@ class GeminiClient:
             "Accept": "application/json",
         }
 
+        # если включён поиск, gemini может ругаться на responseMimeType=application/json
+        if use_search and response_mime_type == "application/json":
+            response_mime_type = "text/plain"
+
         payload: Dict[str, Any] = {
             "contents": [
                 {
@@ -67,7 +70,7 @@ class GeminiClient:
                 "temperature": float(temperature),
                 "maxOutputTokens": int(max_tokens),
                 # помогает получить именно json, а не красивый текст с пояснениями
-                "response_mime_type": response_mime_type,
+                "responseMimeType": response_mime_type,
             },
         }
 

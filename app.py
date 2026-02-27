@@ -1,5 +1,5 @@
 """
-quizbattle - командная викторина в реальном времени
+quizup - командная викторина в реальном времени
 """
 
 import os
@@ -29,7 +29,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quizbattle.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quizup.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB
@@ -1284,7 +1284,7 @@ def init_db():
 if __name__ == '__main__':
     init_db()
     print("=" * 50)
-    print("quizbattle сервер запущен")
+    print("quizup сервер запущен")
     print("=" * 50)
     print("открой http://localhost:5000 в браузере")
     print("=" * 50)

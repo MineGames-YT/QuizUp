@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Игра - QuizBattle{% endblock %}
+{% block title %}Игра - QuizUp{% endblock %}
 
 {% block content %}
 <!-- Таймер и счет -->
@@ -69,7 +69,7 @@
 <div class="waiting-overlay" id="waitingOverlay" style="display: none;">
     <div class="waiting-content">
         <div class="spinner"></div>
-        <p>Ожидаем других игроков...</p>
+        <p id="waitingText">ожидаем...</p>
     </div>
 </div>
 
@@ -132,6 +132,13 @@
     let timerStopped = false;
     let roundActive = true;
     let restartTimerInterval;
+
+    function setWaiting(show, text) {
+        const overlay = document.getElementById('waitingOverlay');
+        const label = document.getElementById('waitingText');
+        if (label && typeof text === 'string') label.textContent = text;
+        if (overlay) overlay.style.display = show ? 'flex' : 'none';
+    }
 
     function getOrCreatePlayerToken() {
         let token = localStorage.getItem('qb_player_token');
@@ -209,7 +216,7 @@
             btn.disabled = false;
         });
         document.getElementById('statusBar').textContent = '';
-        document.getElementById('waitingOverlay').style.display = 'none';
+        setWaiting(false);
 
         const progress = (data.question_number / data.total) * 100;
         document.getElementById('progressFill').style.width = progress + '%';
@@ -222,7 +229,11 @@
         isMyTurn = data.is_your_turn !== false;
 
         if (!isMyTurn) {
-            document.getElementById('waitingOverlay').style.display = 'flex';
+            if (gameMode === 'teams' && data.current_team) {
+                setWaiting(true, 'ходит команда ' + (data.current_team === 'A' ? 'а' : 'б') + ', ждём их ответ...');
+            } else {
+                setWaiting(true, 'ожидаем других игроков...');
+            }
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
 
             if (gameMode === 'teams' && data.current_team) {
@@ -233,6 +244,7 @@
             }
         } else {
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = false);
+            setWaiting(false);
         }
     });
 
@@ -242,7 +254,9 @@
         roundActive = false;
         clearInterval(timerInterval);
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        document.getElementById('waitingOverlay').style.display = 'flex';
+        // после ответа команды убираем полноэкранное ожидание,
+        // чтобы все увидели результат (кто ответил / верно ли).
+        setWaiting(false);
 
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
             hasAnswered = true;
@@ -258,12 +272,8 @@
     socket.on('score_update', function(data) {
         updateLeaderboard(data.leaderboard);
 
-        if (data.answered_by !== myName && roundActive) {
-            roundActive = false;
-            clearInterval(timerInterval);
-            document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-            document.getElementById('waitingOverlay').style.display = 'flex';
-        }
+        // score_update приходит всем, но состояние раунда лучше фиксировать
+        // событием round_locked/time_up. здесь только обновляем счет + статус.
 
         const status = data.is_correct ?
             `${data.answered_by} ответил верно!` :
@@ -323,7 +333,12 @@
         playSound(data.correct ? 'correct' : 'wrong');
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        document.getElementById('waitingOverlay').style.display = 'flex';
+        // в командах не закрываем экран «ожиданием», чтобы было видно подсветку ответа
+        if (gameMode === 'ffa') {
+            setWaiting(true, 'ждём остальных игроков...');
+        } else {
+            setWaiting(false);
+        }
     });
 
     socket.on('time_up', function() {
@@ -334,7 +349,7 @@
         document.getElementById('statusBar').style.color = 'var(--danger)';
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        document.getElementById('waitingOverlay').style.display = 'flex';
+        setWaiting(false);
     });
 
     socket.on('next_question_ready', function() {
