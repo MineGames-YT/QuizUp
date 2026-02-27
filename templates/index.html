@@ -25,7 +25,7 @@
         <p>Настройте свою викторину</p>
         <form id="createForm">
             <div class="form-group">
-                <select name="topic" id="gameTopic" required>
+                <select name="topic" id="gameTopic" class="js-custom-select" required>
                     <option value="" disabled selected>Тема</option>
                     {% for topic in topics %}
                     <option value="{{ topic }}">{{ topic.title() }}</option>
@@ -40,13 +40,13 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <select name="mode" id="gameMode">
+                    <select name="mode" id="gameMode" class="js-custom-select">
                         <option value="teams">Команды</option>
                         <option value="ffa">Все против всех</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <select name="difficulty" id="gameDifficulty">
+                    <select name="difficulty" id="gameDifficulty" class="js-custom-select">
                         <option value="easy">Легко</option>
                         <option value="medium" selected>Средне</option>
                         <option value="hard">Сложно</option>
@@ -56,7 +56,7 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <select name="questions_count" id="gameQuestions">
+                    <select name="questions_count" id="gameQuestions" class="js-custom-select">
                         <option value="5" selected>5</option>
                         <option value="6">6</option>
                         <option value="7">7</option>
@@ -117,6 +117,18 @@
 
     const playerToken = getOrCreatePlayerToken();
     const playerName = getPlayerName();
+
+    // если пришли по инвайту вида /?pin=XXXXXX — подставим pin в форму
+    (function prefillPinFromUrl() {
+        try {
+            const p = new URLSearchParams(window.location.search).get('pin');
+            if (!p) return;
+            const pinInput = document.getElementById('joinPin');
+            if (!pinInput) return;
+            pinInput.value = String(p).toUpperCase().slice(0, 6);
+            pinInput.focus();
+        } catch (e) {}
+    })();
 
     const topicSelect = document.getElementById('gameTopic');
     const customTopicField = document.getElementById('customTopicField');

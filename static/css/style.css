@@ -22,13 +22,7 @@
   --shadow-sm: 0 4px 6px rgba(0,0,0,0.1);
   --shadow-md: 0 10px 20px rgba(0,0,0,0.15);
   --shadow-lg: 0 20px 40px rgba(0,0,0,0.2);
-  --shadow-xl: 0 30px 70px rgba(0,0,0,0.25);
   --shadow-glow: 0 0 30px rgba(255,140,66,0.4);
-
-  /* более мягкое круглое свечение (используем через filter: drop-shadow) */
-  --glow-primary: rgba(255,140,66,0.55);
-  --glow-soft: rgba(255,140,66,0.35);
-  --glow-alt: rgba(212,165,255,0.30);
 
   --border: #ffd9b5;
   --border-light: #ffc299;
@@ -65,10 +59,6 @@
   --select-bg: #2d2d44;
   --select-text: #f0e6dc;
   --select-border: #665a4f;
-
-  --glow-primary: rgba(255,170,94,0.55);
-  --glow-soft: rgba(255,170,94,0.35);
-  --glow-alt: rgba(195,158,255,0.30);
 }
 
 /* --- АНИМАЦИИ --- */
@@ -88,8 +78,24 @@
 }
 
 @keyframes pulseGlow {
-  0%, 100% { filter: drop-shadow(0 0 16px var(--glow-soft)); }
-  50% { filter: drop-shadow(0 0 28px var(--glow-primary)); }
+  0%, 100% { box-shadow: 0 0 20px var(--accent-primary); }
+
+
+@keyframes textGlowPulse {
+  0%, 100% { text-shadow: 0 0 12px rgba(255,140,66,0.45), 0 0 28px rgba(212,165,255,0.22); }
+  50% { text-shadow: 0 0 20px rgba(255,140,66,0.65), 0 0 44px rgba(212,165,255,0.32); }
+}
+
+@keyframes textGlowDanger {
+  0%, 100% { text-shadow: 0 0 12px rgba(231,76,60,0.50), 0 0 28px rgba(231,76,60,0.25); }
+  50% { text-shadow: 0 0 22px rgba(231,76,60,0.75), 0 0 52px rgba(231,76,60,0.35); }
+}
+
+@keyframes resultPop {
+  from { transform: scale(0.92); opacity: 0.0; }
+  to { transform: scale(1); opacity: 1; }
+}
+  50% { box-shadow: 0 0 40px var(--accent-primary); }
 }
 
 @keyframes float {
@@ -208,7 +214,6 @@ body::before {
   right: 20px;
   background: var(--bg-glass);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 2px solid var(--accent-primary);
   border-radius: var(--radius-full);
   width: 55px;
@@ -220,24 +225,19 @@ body::before {
   font-size: 26px;
   z-index: 1000;
   box-shadow: var(--shadow-md);
-  filter: none;
   transition: all 0.3s ease;
   animation: float 3s infinite;
-  overflow: hidden;
-  backface-visibility: hidden;
 }
 
 .theme-toggle:hover {
   transform: scale(1.1) rotate(15deg);
-  box-shadow: var(--shadow-md);
-  filter: drop-shadow(0 0 18px var(--glow-soft));
+  box-shadow: var(--shadow-glow);
 }
 
 /* Навигация */
 .nav {
   background: var(--bg-glass);
   backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
   border-radius: var(--radius-xl);
   padding: 15px 30px;
   margin-bottom: 30px;
@@ -247,8 +247,6 @@ body::before {
   border: 2px solid var(--accent-primary);
   box-shadow: var(--shadow-md);
   animation: fadeInUp 0.6s ease;
-  overflow: hidden;
-  backface-visibility: hidden;
 }
 
 .nav-left {
@@ -334,15 +332,11 @@ body::before {
   border-radius: var(--radius-lg);
   border: 2px solid var(--accent-secondary);
   transition: all 0.3s;
-  overflow: hidden;
-  backface-visibility: hidden;
-  filter: none;
 }
 
 .user-menu:hover {
-  transform: scale(1.02);
-  box-shadow: var(--shadow-md);
-  filter: drop-shadow(0 0 18px var(--glow-alt));
+  transform: scale(1.015);
+  box-shadow: var(--shadow-glow);
 }
 
 .profile-link {
@@ -394,14 +388,11 @@ body::before {
   margin-bottom: 25px;
   box-shadow: var(--shadow-md);
   border: 2px solid var(--accent-secondary);
-  transition: all 0.3s;
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 200ms ease;
   animation: fadeInUp 0.5s ease;
   animation-fill-mode: both;
   position: relative;
   overflow: hidden;
-  filter: none;
-  backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 .card::after {
@@ -414,7 +405,6 @@ body::before {
   background: radial-gradient(circle, rgba(255,140,66,0.05) 0%, transparent 70%);
   animation: spin 20s linear infinite;
   pointer-events: none;
-  border-radius: inherit;
 }
 
 .card:nth-child(1) { animation-delay: 0.1s; }
@@ -423,8 +413,7 @@ body::before {
 
 .card:hover {
   transform: translateY(-5px) scale(1.02);
-  box-shadow: var(--shadow-lg);
-  filter: drop-shadow(0 0 22px var(--glow-soft));
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
 }
 
 .card-header {
@@ -483,6 +472,110 @@ body::before {
   transition: all 0.3s;
 }
 
+/* кастомные выпадающие списки (вместо нативного select) */
+select.js-custom-select.qselect-native {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.qselect {
+  position: relative;
+}
+
+.qselect-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--select-bg);
+  border: 2px solid var(--select-border);
+  border-radius: var(--radius-lg);
+  color: var(--select-text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+.qselect-trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.qselect-open .qselect-trigger,
+.qselect-trigger:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 4px rgba(255,140,66,0.2);
+}
+
+.qselect-value {
+  text-align: left;
+  flex: 1;
+}
+
+.qselect-chevron {
+  opacity: 0.8;
+  transition: transform 0.2s ease;
+}
+
+.qselect-open .qselect-chevron {
+  transform: rotate(180deg);
+}
+
+.qselect-menu {
+  position: fixed;
+  z-index: 10050;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.qselect-menu.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.qselect-list {
+  max-height: inherit;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.qselect-option {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.15s ease, transform 0.15s ease;
+  user-select: none;
+}
+
+.qselect-option:hover {
+  background: rgba(255,140,66,0.12);
+}
+
+.qselect-option.selected {
+  background: rgba(255,140,66,0.22);
+}
+
+.qselect-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
@@ -510,14 +603,16 @@ body::before {
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background 200ms ease, color 200ms ease, border-color 200ms ease;
   text-decoration: none;
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   animation: none;
-  backface-visibility: hidden;
-  transform: translateZ(0);
+}
+
+.btn.pulse {
+  animation: pulse 2s infinite;
 }
 
 .btn::after {
@@ -666,7 +761,7 @@ body::before {
 }
 
 .badge:hover {
-  transform: scale(1.05) rotate(2deg);
+  transform: scale(1.04);
 }
 
 .badge-team-a {
@@ -753,15 +848,11 @@ body::before {
   border-radius: var(--radius-lg);
   border: 2px solid var(--accent-secondary);
   transition: all 0.3s;
-  filter: none;
-  overflow: hidden;
-  backface-visibility: hidden;
 }
 
 .pin-code-wrapper:hover {
   transform: scale(1.05);
-  box-shadow: var(--shadow-md);
-  filter: drop-shadow(0 0 18px var(--glow-alt));
+  box-shadow: var(--shadow-glow);
 }
 
 .pin-code {
@@ -770,7 +861,8 @@ body::before {
   letter-spacing: 6px;
   font-family: monospace;
   color: var(--accent-primary);
-  animation: pulseGlow 2s infinite;
+  animation: textGlowPulse 2.2s ease-in-out infinite;
+  text-shadow: 0 0 14px rgba(255,140,66,0.55);
 }
 
 .invite-btn {
@@ -790,7 +882,7 @@ body::before {
 
 .invite-btn:hover {
   background: var(--accent-primary);
-  transform: scale(1.05) rotate(2deg);
+  transform: scale(1.04);
 }
 
 .game-details {
@@ -869,19 +961,13 @@ body::before {
 
 .team-card {
   background: var(--bg-glass);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-xl);
   padding: 25px;
   border: 2px solid var(--border);
-  transition: all 0.3s;
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 200ms ease, background 200ms ease;
   cursor: pointer;
   animation: zoomIn 0.5s ease;
   animation-fill-mode: both;
-  filter: none;
-  overflow: hidden;
-  backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 .team-card:nth-child(1) { animation-delay: 0.2s; }
@@ -889,8 +975,7 @@ body::before {
 
 .team-card:hover {
   transform: translateY(-5px) scale(1.02);
-  box-shadow: var(--shadow-md);
-  filter: drop-shadow(0 0 20px var(--glow-soft));
+  box-shadow: var(--shadow-glow);
 }
 
 .team-card.team-a {
@@ -926,11 +1011,9 @@ body::before {
 
 .team-name[contenteditable="true"] {
   background: var(--bg-card);
-  box-shadow: 0 0 0 2px rgba(255,140,66,0.35);
+  outline: 2px solid var(--accent-primary);
   cursor: text;
-  animation: none;
-  border-radius: inherit;
-  filter: drop-shadow(0 0 12px var(--glow-soft));
+  animation: pulse 1s infinite;
 }
 
 .team-card.team-a .team-name {
@@ -1070,7 +1153,6 @@ body::before {
 .menu-card {
   background: var(--bg-card);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-xl);
   padding: 40px 30px;
   text-align: center;
@@ -1079,9 +1161,6 @@ body::before {
   animation: fadeInUp 0.5s ease;
   position: relative;
   overflow: hidden;
-  filter: none;
-  backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 .menu-card::before {
@@ -1093,13 +1172,11 @@ body::before {
   height: 200%;
   background: radial-gradient(circle, rgba(255,140,66,0.1) 0%, transparent 70%);
   animation: spin 20s linear infinite;
-  border-radius: inherit;
 }
 
 .menu-card:hover {
   transform: translateY(-10px) scale(1.05);
-  box-shadow: var(--shadow-lg);
-  filter: drop-shadow(0 0 22px var(--glow-soft));
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
 }
 
 .menu-card h2 {
@@ -1133,15 +1210,28 @@ body::before {
   text-align: center;
   background: var(--bg-glass);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   padding: 20px;
   border-radius: var(--radius-xl);
   border: 2px solid var(--accent-primary);
   box-shadow: var(--shadow-md);
-  animation: fadeInUp 0.5s ease, pulseGlow 2s infinite;
+  animation: fadeInUp 0.5s ease;
+  transition: box-shadow 200ms ease, transform 200ms ease;
   background-color: transparent;
-  overflow: hidden;
-  backface-visibility: hidden;
+}
+
+.game-timer.timer-warning {
+  box-shadow: var(--shadow-md), 0 0 55px rgba(255,140,66,0.28);
+}
+
+.game-timer.timer-danger {
+  box-shadow: var(--shadow-md), 0 0 70px rgba(231,76,60,0.30);
+}
+
+.timer-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  transition: opacity 160ms ease;
 }
 
 .timer-value {
@@ -1150,19 +1240,19 @@ body::before {
   color: #ffffff;
   line-height: 1;
   text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-  transition: all 0.2s;
+  transition: transform 160ms ease, color 160ms ease, opacity 160ms ease, text-shadow 160ms ease;
   background: none;
   display: inline-block;
 }
 
 .timer-value.warning {
   color: #ffffff;
-  animation: pulseGlow 1s infinite, shake 0.5s infinite;
+  animation: textGlowPulse 1.1s ease-in-out infinite;
 }
 
 .timer-value.danger {
   color: #ffffff;
-  animation: pulseGlow 0.5s infinite, shake 0.5s infinite;
+  animation: textGlowDanger 0.9s ease-in-out infinite;
 }
 
 .timer-value.stopped {
@@ -1170,10 +1260,30 @@ body::before {
   opacity: 0.7;
 }
 
+.timer-value.result {
+  font-size: 96px;
+  letter-spacing: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2em;
+  animation: resultPop 180ms ease both;
+}
+
+.timer-value.result.correct {
+  color: var(--success);
+  text-shadow: 0 0 20px rgba(46,204,113,0.55), 0 0 44px rgba(46,204,113,0.25);
+}
+
+.timer-value.result.wrong {
+  color: var(--danger);
+  text-shadow: 0 0 20px rgba(231,76,60,0.55), 0 0 44px rgba(231,76,60,0.25);
+}
+
 .score-display {
   background: var(--bg-glass);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-xl);
   padding: 20px;
   border: 2px solid var(--accent-secondary);
@@ -1182,15 +1292,11 @@ body::before {
   min-height: 150px;
   overflow-y: auto;
   position: relative;
-  filter: none;
-  backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 .score-display:hover {
   transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-  filter: drop-shadow(0 0 18px var(--glow-alt));
+  box-shadow: var(--shadow-glow);
 }
 
 .score-team-name {
@@ -1262,7 +1368,6 @@ body::before {
 .question-box {
   background: var(--bg-glass);
   backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
   border-radius: var(--radius-xl);
   padding: 60px;
   margin-bottom: 30px;
@@ -1272,8 +1377,6 @@ body::before {
   animation: scaleIn 0.5s ease;
   position: relative;
   overflow: hidden;
-  backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 .question-box::before {
@@ -1285,7 +1388,6 @@ body::before {
   height: 200%;
   background: radial-gradient(circle, rgba(255,140,66,0.1) 0%, transparent 70%);
   animation: spin 20s linear infinite;
-  border-radius: inherit;
 }
 
 .question-number {
@@ -1321,19 +1423,15 @@ body::before {
   padding: 20px 25px;
   background: var(--bg-glass);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 2px solid var(--border);
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 180ms ease, background 180ms ease;
   text-align: left;
   font-size: 18px;
   color: var(--text-primary);
   position: relative;
   overflow: hidden;
-  filter: none;
-  backface-visibility: hidden;
-  transform: translateZ(0);
   animation: zoomIn 0.5s ease;
   animation-fill-mode: both;
 }
@@ -1360,9 +1458,8 @@ body::before {
 
 .option-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
-  transform: scale(1.02);
-  box-shadow: var(--shadow-sm);
-  filter: drop-shadow(0 0 18px var(--glow-soft));
+  transform: scale(1.015);
+  box-shadow: 0 0 20px rgba(255,140,66,0.3);
 }
 
 .option-btn:active:not(:disabled) {
@@ -1384,6 +1481,9 @@ body::before {
 
 @keyframes wrongShake {
   0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
   20%, 60% { transform: translateX(-8px); }
   40%, 80% { transform: translateX(8px); }
 }
@@ -1404,7 +1504,7 @@ body::before {
 }
 
 .option-btn:hover .option-letter {
-  transform: scale(1.1) rotate(5deg);
+  transform: scale(1.06);
 }
 
 .progress-bar {
@@ -1456,7 +1556,6 @@ body::before {
 .loading-content {
   background: var(--bg-card);
   backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
   padding: 60px;
   border-radius: var(--radius-xl);
   text-align: center;
@@ -1465,8 +1564,6 @@ body::before {
   animation: scaleIn 0.5s ease;
   max-width: 500px;
   width: 90%;
-  overflow: hidden;
-  backface-visibility: hidden;
 }
 
 .loading-spinner {
@@ -1505,21 +1602,34 @@ body::before {
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: fadeIn 0.3s ease;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 160ms ease, visibility 160ms ease;
+}
+
+.waiting-overlay.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .waiting-content {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   padding: 70px;
   border-radius: var(--radius-xl);
   text-align: center;
   border: 2px solid var(--accent-primary);
   box-shadow: var(--shadow-xl);
-  animation: scaleIn 0.5s ease;
-  overflow: hidden;
-  backface-visibility: hidden;
+  transform: translateY(6px);
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.waiting-overlay.show .waiting-content {
+  transform: translateY(0);
+  opacity: 1;
 }
 
 /* Модальное окно */
@@ -1541,7 +1651,6 @@ body::before {
 .modal-content {
   background: var(--bg-card);
   backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
   border-radius: var(--radius-xl);
   max-width: 700px;
   width: 90%;
@@ -1550,16 +1659,6 @@ body::before {
   border: 2px solid var(--accent-primary);
   box-shadow: var(--shadow-xl), 0 0 100px var(--accent-primary);
   animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: hidden;
-  backface-visibility: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
-  }
 }
 
 .modal-header {
@@ -1650,7 +1749,7 @@ body::before {
   font-size: 18px;
   color: var(--accent-primary);
   margin-top: 10px;
-  animation: pulseGlow 2s infinite;
+  animation: textGlowPulse 2.2s ease-in-out infinite;
 }
 
 /* Панель админа */
@@ -1678,7 +1777,7 @@ body::before {
 }
 
 .admin-btn:hover {
-  transform: scale(1.1) rotate(2deg);
+  transform: scale(1.06);
 }
 
 /* Профиль */
@@ -1694,7 +1793,7 @@ body::before {
 }
 
 .profile-avatar:hover {
-  transform: scale(1.1) rotate(5deg);
+  transform: scale(1.06);
 }
 
 .avatar-placeholder {

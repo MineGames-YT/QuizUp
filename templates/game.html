@@ -16,7 +16,7 @@
     
     <div class="game-timer">
         <div class="timer-value" id="timer">30</div>
-        <div style="font-size: 13px; color: var(--text-muted);">Секунд</div>
+        <div class="timer-label" id="timerLabel">секунд</div>
     </div>
     
     <div class="score-display" style="margin: 0;">
@@ -133,11 +133,58 @@
     let roundActive = true;
     let restartTimerInterval;
 
+    function resetTimerUI(seconds) {
+        const timerEl = document.getElementById('timer');
+        const labelEl = document.getElementById('timerLabel');
+        const timerBox = document.querySelector('.game-timer');
+
+        if (timerBox) timerBox.classList.remove('timer-warning', 'timer-danger');
+        if (timerEl) {
+            timerEl.classList.remove('warning', 'danger', 'stopped', 'result', 'correct', 'wrong');
+            timerEl.textContent = Number.isFinite(seconds) ? String(seconds) : '30';
+        }
+        if (labelEl) {
+            labelEl.textContent = 'секунд';
+            labelEl.style.opacity = '1';
+        }
+    }
+
+    function showTimerResult(isCorrect) {
+        const timerEl = document.getElementById('timer');
+        const labelEl = document.getElementById('timerLabel');
+        const timerBox = document.querySelector('.game-timer');
+
+        if (timerBox) timerBox.classList.remove('timer-warning', 'timer-danger');
+        if (!timerEl) return;
+
+        timerEl.classList.remove('warning', 'danger', 'stopped');
+        timerEl.classList.add('result', isCorrect ? 'correct' : 'wrong');
+        timerEl.textContent = isCorrect ? '✓' : '✕';
+
+        if (labelEl) {
+            labelEl.textContent = '';
+            labelEl.style.opacity = '0.55';
+        }
+    }
+
+
     function setWaiting(show, text) {
         const overlay = document.getElementById('waitingOverlay');
         const label = document.getElementById('waitingText');
         if (label && typeof text === 'string') label.textContent = text;
-        if (overlay) overlay.style.display = show ? 'flex' : 'none';
+        if (!overlay) return;
+
+        if (show) {
+            overlay.style.display = 'flex';
+            // даём браузеру один кадр, чтобы transition сработал ровно
+            requestAnimationFrame(() => overlay.classList.add('show'));
+        } else {
+            overlay.classList.remove('show');
+            // прячем после плавного затухания
+            setTimeout(() => {
+                if (!overlay.classList.contains('show')) overlay.style.display = 'none';
+            }, 180);
+        }
     }
 
     function getOrCreatePlayerToken() {
@@ -217,6 +264,7 @@
         });
         document.getElementById('statusBar').textContent = '';
         setWaiting(false);
+        resetTimerUI(data.time_left || 30);
 
         const progress = (data.question_number / data.total) * 100;
         document.getElementById('progressFill').style.width = progress + '%';
@@ -257,6 +305,7 @@
         // после ответа команды убираем полноэкранное ожидание,
         // чтобы все увидели результат (кто ответил / верно ли).
         setWaiting(false);
+        if (typeof data.correct === 'boolean') showTimerResult(data.correct);
 
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
             hasAnswered = true;
@@ -332,6 +381,8 @@
 
         playSound(data.correct ? 'correct' : 'wrong');
 
+        showTimerResult(!!data.correct);
+
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
         // в командах не закрываем экран «ожиданием», чтобы было видно подсветку ответа
         if (gameMode === 'ffa') {
@@ -350,6 +401,7 @@
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
         setWaiting(false);
+        showTimerResult(false);
     });
 
     socket.on('next_question_ready', function() {
@@ -410,23 +462,44 @@
 
         let timeLeft = seconds;
         const timerEl = document.getElementById('timer');
+        const labelEl = document.getElementById('timerLabel');
+        const timerBox = document.querySelector('.game-timer');
 
-        timerEl.textContent = timeLeft;
-        timerEl.classList.remove('warning', 'danger', 'stopped');
+        if (timerEl) {
+            timerEl.classList.remove('warning', 'danger', 'stopped', 'result', 'correct', 'wrong');
+            timerEl.textContent = timeLeft;
+        }
+        if (labelEl) {
+            labelEl.textContent = 'секунд';
+            labelEl.style.opacity = '1';
+        }
+        if (timerBox) timerBox.classList.remove('timer-warning', 'timer-danger');
 
         timerInterval = setInterval(() => {
             if (timerStopped || !roundActive) {
                 clearInterval(timerInterval);
                 return;
             }
+
             timeLeft--;
-            timerEl.textContent = timeLeft;
+            if (timerEl) timerEl.textContent = timeLeft;
 
             if (timeLeft <= 5) {
-                timerEl.classList.add('danger');
+                if (timerEl) {
+                    timerEl.classList.add('danger');
+                    timerEl.classList.remove('warning');
+                }
+                if (timerBox) {
+                    timerBox.classList.add('timer-danger');
+                    timerBox.classList.remove('timer-warning');
+                }
                 playSound('tick');
             } else if (timeLeft <= 10) {
-                timerEl.classList.add('warning');
+                if (timerEl) timerEl.classList.add('warning');
+                if (timerBox) timerBox.classList.add('timer-warning');
+            } else {
+                if (timerEl) timerEl.classList.remove('warning', 'danger');
+                if (timerBox) timerBox.classList.remove('timer-warning', 'timer-danger');
             }
 
             if (timeLeft <= 0) {
@@ -466,12 +539,22 @@
     }
 
     function endGame() {
-        if (confirm('Завершить игру?')) {
+        const ask = (window.QB_UI && typeof window.QB_UI.confirm === 'function')
+            ? window.QB_UI.confirm({
+                title: 'завершить игру',
+                message: 'точно завершить игру? все увидят результаты.',
+                okText: 'да',
+                cancelText: 'нет'
+            })
+            : Promise.resolve(confirm('Завершить игру?'));
+
+        Promise.resolve(ask).then((ok) => {
+            if (!ok) return;
             socket.emit('admin_end', { pin: gamePin, player_token: myToken });
-        }
+        });
     }
 
-    socket.on('game_resumed', function() {
+    socket.on('game_resumed' , function() {
         socket.emit('get_question', { pin: gamePin });
     });
 

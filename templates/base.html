@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}QuizUp{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="{{ url_for('static', filename='js/custom_select.js') }}" defer></script>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -47,8 +48,12 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <script>
+                    window.__flashQueue = window.__flashQueue || [];
                     {% for category, message in messages %}
-                        showNotification('{{ message }}', '{{ category if category in ['error', 'success'] else 'info' }}');
+                        window.__flashQueue.push({
+                            message: {{ message|tojson }},
+                            type: {{ (category if category in ['error', 'success'] else 'info')|tojson }}
+                        });
                     {% endfor %}
                 </script>
             {% endif %}
@@ -147,6 +152,52 @@
             container.appendChild(notification);
             setTimeout(() => notification.remove(), duration);
         }
+
+        // копирование в буфер (с fallback), чтобы работало везде
+        async function copyToClipboard(text) {
+            text = (text ?? '').toString();
+            if (!text) return false;
+
+            // современный api
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (e) {
+                // идём в fallback
+            }
+
+            // fallback: временный textarea
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                ta.style.top = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand('copy');
+                ta.remove();
+                return !!ok;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        window.copyToClipboard = copyToClipboard;
+
+        // показать накопленные flash-сообщения (если были)
+        (function flushFlashQueue() {
+            try {
+                const q = window.__flashQueue || [];
+                if (!Array.isArray(q) || !q.length) return;
+                q.forEach(item => showNotification(item.message, item.type || 'info'));
+                window.__flashQueue = [];
+            } catch (e) {}
+        })();
         
         // Глобальные функции для загрузочного оверлея
         function showLoading(text, subtext) {

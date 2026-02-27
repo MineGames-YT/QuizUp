@@ -16,8 +16,14 @@
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                 </button>
+                <button class="btn-icon" onclick="copyInvite()" title="Копировать ссылку-приглашение">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 1 0-7l1.5-1.5a5 5 0 0 1 7 7L17 13"></path>
+                        <path d="M14 11a5 5 0 0 1 0 7L12.5 19.5a5 5 0 1 1-7-7L7 11"></path>
+                    </svg>
+                </button>
             </div>
-            <button class="invite-btn" onclick="inviteLink()">
+            <button class="invite-btn" onclick="copyInvite()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4v16h16"></path>
                     <polyline points="20 10 12 18 4 10"></polyline>
@@ -385,15 +391,16 @@
     }
 
     function copyPin() {
-        navigator.clipboard.writeText(gamePin).then(() => {
-            showNotification('PIN скопирован!', 'success');
+        window.copyToClipboard(gamePin).then((ok) => {
+            showNotification(ok ? 'pin скопирован' : 'не удалось скопировать pin', ok ? 'success' : 'error');
         });
     }
 
-    function inviteLink() {
-        const url = window.location.href;
-        navigator.clipboard.writeText(url).then(() => {
-            showNotification('Ссылка на лобби скопирована!', 'success');
+    function copyInvite() {
+        // открываем главную страницу, pin подставится автоматически
+        const url = `${window.location.origin}/?pin=${encodeURIComponent(gamePin)}`;
+        window.copyToClipboard(url).then((ok) => {
+            showNotification(ok ? 'ссылка-приглашение скопирована' : 'не удалось скопировать ссылку', ok ? 'success' : 'error');
         });
     }
 </script>
