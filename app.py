@@ -604,8 +604,64 @@ def profile():
 
 @app.route('/rating')
 def rating():
-    users = User.query.filter(User.total_games > 0).order_by(User.rating.desc()).limit(100).all()
-    return render_template('rating.html', users=users)
+    # Получаем всех пользователей с сыгранными играми
+    registered_users = User.query.filter(User.total_games > 0).order_by(User.rating.desc()).all()
+    
+    # Получаем статистику гостей из PlayerStats
+    guest_stats = db.session.query(
+        PlayerStats.guest_name,
+        func.sum(PlayerStats.score).label('total_score'),
+        func.count(PlayerStats.id).label('total_games'),
+        func.sum(PlayerStats.correct_answers).label('total_correct'),
+        func.sum(PlayerStats.wrong_answers).label('total_wrong'),
+        func.avg(PlayerStats.avg_response_time).label('avg_time')
+    ).filter(
+        PlayerStats.user_id.is_(None),  # только гости
+        PlayerStats.guest_name.isnot(None)  # у которых есть имя
+    ).group_by(
+        PlayerStats.guest_name
+    ).order_by(
+        func.sum(PlayerStats.score).desc()
+    ).all()
+    
+    # Преобразуем гостей в формат, похожий на User
+    guest_list = []
+    for g in guest_stats:
+        total_games = g.total_games or 0
+        total_score = g.total_score or 0
+        # Простая формула рейтинга для гостей
+        rating = round((total_score / total_games) * 100) if total_games > 0 else 0
+        
+        guest_list.append({
+            'id': f"guest_{g.guest_name}",
+            'username': g.guest_name,
+            'rating': rating,
+            'total_wins': 0,  # Для гостей не считаем победы отдельно
+            'total_games': total_games,
+            'total_score': total_score,
+            'is_guest': True
+        })
+    
+    # Объединяем и сортируем
+    all_players = []
+    for u in registered_users:
+        all_players.append({
+            'id': u.id,
+            'username': u.username,
+            'rating': u.rating,
+            'total_wins': u.total_wins,
+            'total_games': u.total_games,
+            'total_score': u.total_points,
+            'is_guest': False,
+            'avatar': u.avatar
+        })
+    
+    all_players.extend(guest_list)
+    
+    # Сортируем по рейтингу (или по очкам, если рейтинг одинаковый)
+    all_players.sort(key=lambda x: (x['rating'], x.get('total_score', 0)), reverse=True)
+    
+    return render_template('rating.html', players=all_players[:100])  # Топ-100
 
 @app.route('/join', methods=['POST'])
 def join():
@@ -694,7 +750,7 @@ def end_game(pin: str):
                 ps = PlayerStats(
                     game_id=history.id,
                     user_id=p['user_id'],
-                    guest_name=None if p['user_id'] else p['name'],
+                    guest_name=None if p['user_id'] else p['name'],  # это уже должно быть
                     team=p['team'],
                     score=p['score'],
                     correct_answers=p['correct'],

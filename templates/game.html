@@ -35,30 +35,41 @@
     Вопрос <span id="currentQ">1</span> из <span id="totalQ">10</span>
 </div>
 
-<!-- Вопрос -->
-<div class="question-box" id="questionBox">
-    <div class="question-number">Вопрос</div>
-    <div class="question-text" id="questionText">Загрузка...</div>
-</div>
+<!-- БЛОК ВОПРОСА И ОТВЕТОВ С БЛЮРОМ -->
+<div id="gameplayBlock" style="position: relative; transition: filter 0.3s;">
+    <!-- Вопрос -->
+    <div class="question-box" id="questionBox">
+        <div class="question-number">Вопрос</div>
+        <div class="question-text" id="questionText">Загрузка...</div>
+    </div>
 
-<!-- Варианты ответов -->
-<div class="options-grid" id="optionsGrid">
-    <button class="option-btn" data-index="0" onclick="submitAnswer(0)">
-        <span class="option-letter">A</span>
-        <span id="opt0">...</span>
-    </button>
-    <button class="option-btn" data-index="1" onclick="submitAnswer(1)">
-        <span class="option-letter">B</span>
-        <span id="opt1">...</span>
-    </button>
-    <button class="option-btn" data-index="2" onclick="submitAnswer(2)">
-        <span class="option-letter">C</span>
-        <span id="opt2">...</span>
-    </button>
-    <button class="option-btn" data-index="3" onclick="submitAnswer(3)">
-        <span class="option-letter">D</span>
-        <span id="opt3">...</span>
-    </button>
+    <!-- Варианты ответов -->
+    <div class="options-grid" id="optionsGrid">
+        <button class="option-btn" data-index="0" onclick="submitAnswer(0)">
+            <span class="option-letter">A</span>
+            <span id="opt0">...</span>
+        </button>
+        <button class="option-btn" data-index="1" onclick="submitAnswer(1)">
+            <span class="option-letter">B</span>
+            <span id="opt1">...</span>
+        </button>
+        <button class="option-btn" data-index="2" onclick="submitAnswer(2)">
+            <span class="option-letter">C</span>
+            <span id="opt2">...</span>
+        </button>
+        <button class="option-btn" data-index="3" onclick="submitAnswer(3)">
+            <span class="option-letter">D</span>
+            <span id="opt3">...</span>
+        </button>
+    </div>
+
+    <!-- ОВЕРЛЕЙ ОЖИДАНИЯ (поверх вопроса и ответов) -->
+    <div id="waitingOverlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; border-radius: var(--radius-lg); z-index: 10;">
+        <div style="background: var(--bg-card); padding: 24px 32px; border-radius: var(--radius-lg); text-align: center; border: 1px solid var(--border);">
+            <div class="spinner" style="width: 40px; height: 40px; margin: 0 auto 15px;"></div>
+            <p style="font-size: 20px; font-weight: 600; color: var(--primary-light);" id="waitingText">Ожидаем команду...</p>
+        </div>
+    </div>
 </div>
 
 <!-- Статус -->
@@ -82,14 +93,6 @@
         </div>
         <input type="text" id="chatInput" placeholder="Напишите сообщение..." maxlength="100">
         <button id="chatSendBtn" class="btn btn-primary btn-small">➤</button>
-    </div>
-</div>
-
-<!-- Оверлей ожидания -->
-<div class="waiting-overlay" id="waitingOverlay" style="display: none;">
-    <div class="waiting-content">
-        <div class="spinner"></div>
-        <p id="waitingText">Ожидаем...</p>
     </div>
 </div>
 
@@ -196,20 +199,18 @@
         }
     }
 
+    // Функция для показа/скрытия оверлея ожидания поверх вопроса
     function setWaiting(show, text) {
         const overlay = document.getElementById('waitingOverlay');
-        const label = document.getElementById('waitingText');
-        if (label && typeof text === 'string') label.textContent = text;
+        const waitingText = document.getElementById('waitingText');
+        
         if (!overlay) return;
-
+        
         if (show) {
+            if (text) waitingText.textContent = text;
             overlay.style.display = 'flex';
-            requestAnimationFrame(() => overlay.classList.add('show'));
         } else {
-            overlay.classList.remove('show');
-            setTimeout(() => {
-                if (!overlay.classList.contains('show')) overlay.style.display = 'none';
-            }, 200);
+            overlay.style.display = 'none';
         }
     }
 
@@ -288,7 +289,7 @@
             btn.disabled = false;
         });
         document.getElementById('statusBar').textContent = '';
-        setWaiting(false);
+        setWaiting(false);  // Убираем оверлей ожидания
         resetTimerUI(data.time_left || 30);
 
         const progress = (data.question_number / data.total) * 100;
@@ -303,9 +304,9 @@
 
         if (!isMyTurn) {
             if (gameMode === 'teams' && data.current_team) {
-                setWaiting(true, 'Ход команды ' + (data.current_team === 'A' ? 'А' : 'Б') + ', ждём...');
+                setWaiting(true, 'Ход команды ' + (data.current_team === 'A' ? 'А' : 'Б'));
             } else {
-                setWaiting(true, 'Ожидаем других игроков...');
+                setWaiting(true, 'Ожидание других игроков');
             }
             document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
 
@@ -321,17 +322,16 @@
         }
     });
 
-    // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК round_locked
     socket.on('round_locked', function(data) {
         if (gameMode !== 'teams') return;
 
         roundActive = false;
         clearInterval(timerInterval);
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
-        setWaiting(false); // убираем оверлей ожидания
+        setWaiting(false);  // Убираем оверлей ожидания
+        
         if (typeof data.correct === 'boolean') showTimerResult(data.correct);
 
-        // Показываем сообщение о результате для всех игроков
         if (data.message) {
             document.getElementById('statusBar').textContent = data.message;
             document.getElementById('statusBar').style.color = data.correct ? 'var(--success)' : 'var(--danger)';
@@ -340,7 +340,6 @@
         if (myTeam && data.team && myTeam === data.team && !hasAnswered) {
             hasAnswered = true;
             isMyTurn = false;
-            // Для своей команды дополнительно ничего не делаем, сообщение уже показано
         }
     });
 
@@ -403,10 +402,10 @@
         showTimerResult(!!data.correct);
 
         document.querySelectorAll('.option-btn').forEach(btn => btn.disabled = true);
+        
+        // В FFA показываем оверлей ожидания
         if (gameMode === 'ffa') {
             setWaiting(true, 'Ждём остальных игроков...');
-        } else {
-            setWaiting(false);
         }
     });
 
@@ -508,7 +507,6 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = 'chat-message';
 
-        // Увеличение эмодзи
         const textWithEmoji = data.text.replace(
             /([\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])/gu,
             '<span class="emoji-large">$1</span>'

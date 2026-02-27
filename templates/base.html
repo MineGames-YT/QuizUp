@@ -57,7 +57,7 @@
             </div>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}">Играть</a>
-                <a href="{{ url_for('rating') }}">Рейтинг</a>
+                <a href="{{ url_for('rating') }}">Рейтинг игроков</a>
                 {% if current_user.is_authenticated %}
                     <div class="user-menu">
                         <a href="{{ url_for('profile') }}" class="profile-link">
