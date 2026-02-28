@@ -1,13 +1,4 @@
-"""минимальный клиент для groq (openai-совместимый api)
-
-используется только для генерации вопросов.
-формат ответа: /openai/v1/chat/completions
-
-настройки через env:
-- GROQ_API_KEY
-- GROQ_MODEL (по умолчанию llama-3.3-70b-versatile)
-- GROQ_API_BASE_URL (по умолчанию https://api.groq.com/openai/v1)
-"""
+#минимальный клиент для groq 
 
 from __future__ import annotations
 
@@ -41,7 +32,6 @@ def _extract_json_object(text: str) -> Optional[dict]:
     text = (text or "").strip()
     if not text:
         return None
-    # сначала пробуем как есть
     try:
         obj = json.loads(text)
         if isinstance(obj, dict):
@@ -49,7 +39,7 @@ def _extract_json_object(text: str) -> Optional[dict]:
     except Exception:
         pass
 
-    # иногда модель оборачивает в ```json ... ```
+
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
     if m:
         try:
@@ -57,7 +47,6 @@ def _extract_json_object(text: str) -> Optional[dict]:
         except Exception:
             pass
 
-    # последняя попытка: найти первую {...} структуру
     m2 = re.search(r"(\{.*\})", text, flags=re.DOTALL)
     if m2:
         candidate = m2.group(1)
@@ -86,7 +75,6 @@ class GroqClient:
             raise GroqAPIError("не задан groq api key")
 
         base = (self.api_base_url or "").rstrip("/")
-        # поддержка разных вариантов: https://api.groq.com или .../openai/v1
         if base.endswith("/openai/v1"):
             url = f"{base}/chat/completions"
         elif base.endswith("/v1"):

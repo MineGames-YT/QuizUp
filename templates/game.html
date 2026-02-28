@@ -442,8 +442,14 @@
                 winnerText.style.color = data.winner === 'A' ? 'var(--team-a)' : 'var(--team-b)';
             }
         } else {
-            winnerText.textContent = `Победитель: ${data.winner}`;
-            winnerText.style.color = 'var(--primary)';
+            if (data.winner === 'draw') {
+                const names = (data.winners || []).filter(Boolean).join(', ');
+                winnerText.textContent = names ? `Ничья между: ${names}` : 'Ничья!';
+                winnerText.style.color = '#d69e2e';
+            } else {
+                winnerText.textContent = `Победитель: ${data.winner}`;
+                winnerText.style.color = 'var(--primary)';
+            }
         }
 
         const tbody = document.getElementById('resultsTable');

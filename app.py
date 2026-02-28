@@ -105,7 +105,7 @@ class PlayerStats(db.Model):
 # ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 
 active_games = {}
-games_lock = threading.Lock()
+games_lock = threading.RLock()
 
 TOPICS = [
     'история',
@@ -250,7 +250,6 @@ def get_random_questions(topic, count=10, difficulty=None):
 
 # ==================== КЛАСС ИГРЫ ====================
 
-# В классе GameSession добавьте новое поле в __init__
 class GameSession:
     def __init__(
         self,
@@ -263,7 +262,7 @@ class GameSession:
         questions_count: int = 5,
         time_limit: int = QUESTION_TIME_LIMIT,
         bonus_enabled: bool = True,
-        is_public: bool = False,  # НОВОЕ ПОЛЕ
+        is_public: bool = False,  
     ):
         self.pin = generate_pin()
         self.creator_id = creator_id
@@ -275,7 +274,7 @@ class GameSession:
         self.questions_count = int(questions_count) * 2 if self.mode == 'teams' else int(questions_count)
         self.time_limit = int(time_limit)
         self.bonus_enabled = bool(bonus_enabled)
-        self.is_public = bool(is_public)  # НОВОЕ ПОЛЕ
+        self.is_public = bool(is_public)  
         self.team_names = {'A': 'Команда А', 'B': 'Команда Б'}
 
         self.status = 'waiting'
@@ -616,8 +615,8 @@ def rating():
         func.sum(PlayerStats.wrong_answers).label('total_wrong'),
         func.avg(PlayerStats.avg_response_time).label('avg_time')
     ).filter(
-        PlayerStats.user_id.is_(None),  # только гости
-        PlayerStats.guest_name.isnot(None)  # у которых есть имя
+        PlayerStats.user_id.is_(None),  
+        PlayerStats.guest_name.isnot(None)  
     ).group_by(
         PlayerStats.guest_name
     ).order_by(
@@ -719,6 +718,7 @@ def end_game(pin: str):
                 'avg_time': (sum(p.get('response_times', [])) / len(p.get('response_times', []))) if p.get('response_times') else 0,
             })
         winner = None
+        winners = []
         if mode == 'teams':
             a = leaderboard.get('A', 0)
             b = leaderboard.get('B', 0)
@@ -730,9 +730,15 @@ def end_game(pin: str):
                 winner = 'draw'
         else:
             if stats:
-                winner = stats[0]['name']
+                top_score = stats[0].get('score', 0)
+                winners = [s.get('name') for s in stats if s.get('score', 0) == top_score]
+                winners = [w for w in winners if w]
+                if len(winners) == 1:
+                    winner = winners[0]
+                elif len(winners) > 1:
+                    winner = 'draw'
 
-        # Запускаем таймер для очистки игры через 60 секунд
+
         def _cleanup():
             with games_lock:
                 if pin in active_games and active_games[pin].status == 'finished':
@@ -750,7 +756,7 @@ def end_game(pin: str):
                 ps = PlayerStats(
                     game_id=history.id,
                     user_id=p['user_id'],
-                    guest_name=None if p['user_id'] else p['name'],  # это уже должно быть
+                    guest_name=None if p['user_id'] else p['name'], 
                     team=p['team'],
                     score=p['score'],
                     correct_answers=p['correct'],
@@ -781,6 +787,7 @@ def end_game(pin: str):
         'topic': topic,
         'mode': mode,
         'winner': winner,
+        'winners': winners,
     }, room=pin)
 
 def time_up(pin: str, timer_id: str):
@@ -837,7 +844,6 @@ def handle_disconnect():
                 if len(game.players) == 0:
                     del active_games[pin]
             else:
-                # Для завершённой игры не запускаем таймер удаления (она удалится через 60 секунд из end_game)
                 if game.status == 'finished':
                     continue
 
@@ -891,7 +897,7 @@ def handle_create_game(data):
     difficulty = (data.get('difficulty') or 'medium').strip()
     questions_count = int(data.get('questions_count', 5))
     bonus_enabled = bool(data.get('bonus_enabled', True))
-    is_public = bool(data.get('is_public', False))  # НОВОЕ ПОЛЕ
+    is_public = bool(data.get('is_public', False))  
     creator_token = (data.get('player_token') or '').strip() or uuid.uuid4().hex
 
     if not topic:
@@ -914,7 +920,7 @@ def handle_create_game(data):
         questions_count=questions_count,
         time_limit=QUESTION_TIME_LIMIT,
         bonus_enabled=bonus_enabled,
-        is_public=is_public,  # НОВОЕ ПОЛЕ
+        is_public=is_public, 
     )
 
     with games_lock:
@@ -929,7 +935,7 @@ def handle_create_game(data):
         'questions_count': game.questions_count,
         'questions_per_team': game.questions_per_team,
         'time_limit': game.time_limit,
-        'is_public': game.is_public,  # НОВОЕ ПОЛЕ
+        'is_public': game.is_public,  
     })
 
 def _generate_player_name():
@@ -1036,7 +1042,7 @@ def handle_join_game(data):
         'players': get_players_list(game),
         'bonus_enabled': game.bonus_enabled,
         'team_names': game.team_names,
-        'is_public': game.is_public,  # ВАЖНО: добавить эту строку
+        'is_public': game.is_public, 
     }
 
     emit('joined', joined_payload, to=request.sid)
@@ -1150,52 +1156,92 @@ def handle_restart_game(data):
     pin = data.get('pin', '').upper().strip()
     actor_token = data.get('player_token', '').strip()
 
-    with games_lock:
-        old_game = active_games.get(pin)
-        if not old_game or old_game.status != 'finished':
-            emit('error_message', {'message': 'Игра не может быть перезапущена'})
-            return
+    if not pin:
+        emit('error_message', {'message': 'Игра не может быть перезапущена'})
+        return
 
-        # Проверяем, есть ли ещё хост в игре
-        host_present = False
-        for p in old_game.players.values():
-            if p.get('connected') and (
-                (old_game.creator_id and p.get('user_id') == old_game.creator_id) or
-                (old_game.creator_token and p.get('token') == old_game.creator_token)
-            ):
-                host_present = True
-                break
+    try:
+        # снимаем слепок старой игры под локом, а новую создаём уже без лока
+        with games_lock:
+            old_game = active_games.get(pin)
+            if not old_game or old_game.status != 'finished':
+                emit('error_message', {'message': 'Игра не может быть перезапущена'})
+                return
 
-        if not host_present:
-            socketio.emit('redirect_to_main', {'message': 'Хост покинул игру'}, room=pin)
-            return
+            # проверяем, что хост ещё подключён
+            host_present = False
+            for p in old_game.players.values():
+                if p.get('connected') and (
+                    (old_game.creator_id and p.get('user_id') == old_game.creator_id) or
+                    (old_game.creator_token and p.get('token') == old_game.creator_token)
+                ):
+                    host_present = True
+                    break
 
-        # Создаём новую игру с теми же параметрами
-        questions_count = old_game.questions_per_team if old_game.mode == 'teams' else old_game.questions_count
-        new_game = GameSession(
-            creator_id=old_game.creator_id,
-            creator_token=old_game.creator_token,
-            topic=old_game.topic,
-            mode=old_game.mode,
-            difficulty=old_game.difficulty,
-            questions_count=questions_count,
-            time_limit=old_game.time_limit,
-            bonus_enabled=old_game.bonus_enabled,
-        )
-        # Переносим игроков (только подключённых)
-        for token, p in old_game.players.items():
-            if p.get('connected'):
-                new_game.add_or_reconnect_player(
-                    sid=None,
-                    player_token=token,
-                    user_id=p['user_id'],
-                    name=p['name'],
-                    team=p.get('team'),
-                    avatar=p.get('avatar'),
-                )
-        active_games[new_game.pin] = new_game
+            if not host_present:
+                socketio.emit('redirect_to_main', {'message': 'Хост покинул игру'}, room=pin)
+                return
 
-    socketio.emit('game_restarted', {'new_pin': new_game.pin}, room=pin)
+            questions_count_param = old_game.questions_per_team if old_game.mode == 'teams' else old_game.questions_count
+            game_params = {
+                'creator_id': old_game.creator_id,
+                'creator_token': old_game.creator_token,
+                'topic': old_game.topic,
+                'mode': old_game.mode,
+                'difficulty': old_game.difficulty,
+                'questions_count': questions_count_param,
+                'time_limit': old_game.time_limit,
+                'bonus_enabled': old_game.bonus_enabled,
+                'is_public': old_game.is_public,
+            }
+
+            players_snapshot = []
+            for token, p in old_game.players.items():
+                if p.get('connected'):
+                    players_snapshot.append({
+                        'token': token,
+                        'user_id': p.get('user_id'),
+                        'name': p.get('name'),
+                        'team': p.get('team'),
+                        'avatar': p.get('avatar'),
+                    })
+
+        new_game = GameSession(**game_params)
+
+        # переносим игроков без привязки к sid (они зайдут в новую комнату через /lobby)
+        for p in players_snapshot:
+            token = p['token']
+            team = p.get('team') if new_game.mode == 'teams' else None
+
+            if new_game.mode == 'teams':
+                if team not in ('A', 'B'):
+                    team = 'A' if len(new_game.teams['A']) <= len(new_game.teams['B']) else 'B'
+                new_game.teams[team].append(token)
+
+            new_game.players[token] = {
+                'token': token,
+                'sid': None,
+                'user_id': p.get('user_id'),
+                'name': p.get('name') or 'игрок',
+                'team': team,
+                'score': 0,
+                'correct': 0,
+                'wrong': 0,
+                'response_times': [],
+                'connected': True,
+                'disconnect_timer': None,
+                'avatar': p.get('avatar'),
+            }
+
+        with games_lock:
+            active_games[new_game.pin] = new_game
+
+        socketio.emit('game_restarted', {'new_pin': new_game.pin}, room=pin)
+
+    except Exception:
+        app.logger.exception('restart_game failed')
+        emit('error_message', {'message': 'не удалось перезапустить игру'})
+        return
 
 @socketio.on('get_question')
 def handle_get_question(data):
